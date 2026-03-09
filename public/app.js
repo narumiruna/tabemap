@@ -14,7 +14,10 @@
 
   // ── DOM refs ──────────────────────────────────────────────────────────────
   const statusBar      = document.getElementById('status-bar');
+  const gpsInfo        = document.getElementById('gps-info');
   const searchBtn      = document.getElementById('search-btn');
+  const diagBtn        = document.getElementById('diag-btn');
+  const diagOutput     = document.getElementById('diag-output');
   const manualCoords   = document.getElementById('manual-coords');
   const inputLat       = document.getElementById('input-lat');
   const inputLng       = document.getElementById('input-lng');
@@ -35,6 +38,15 @@
   function setStatus(msg, type = 'info') {
     statusBar.textContent = msg;
     statusBar.className = 'status-bar ' + type;
+  }
+
+  function setGpsInfo(msg) {
+    gpsInfo.textContent = `GPS：${msg}`;
+  }
+
+  function setDiagOutput(lines) {
+    diagOutput.style.display = '';
+    diagOutput.textContent = lines.join('\n');
   }
 
   // ── Clear map restaurant layers ───────────────────────────────────────────
@@ -177,40 +189,68 @@
     ]);
   }
 
-  function isWithinTaiwanBounds(lat, lng) {
-    // Rough bounding box for Taiwan main area + nearby islands.
-    return lat >= 20.5 && lat <= 26.6 && lng >= 118.0 && lng <= 123.5;
+  async function runLocationDiagnostics() {
+    const now = new Date();
+    const lines = [
+      `time: ${now.toISOString()}`,
+      `isSecureContext: ${String(window.isSecureContext)}`,
+      `userAgent: ${navigator.userAgent}`,
+    ];
+
+    if (!navigator.geolocation) {
+      lines.push('geolocation: unavailable');
+      setDiagOutput(lines);
+      setStatus('❌ 瀏覽器不支援定位', 'error');
+      return;
+    }
+
+    lines.push('geolocation: available');
+
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const result = await navigator.permissions.query({ name: 'geolocation' });
+        lines.push(`permission.state: ${result.state}`);
+      } catch {
+        lines.push('permission.state: unavailable');
+      }
+    } else {
+      lines.push('permission api: unavailable');
+    }
+
+    const options = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+    lines.push(`request: ${JSON.stringify(options)}`);
+
+    try {
+      const pos = await withTimeout(
+        getCurrentPositionAsync(options),
+        12000,
+        '定位逾時'
+      );
+      lines.push(`coords.lat: ${pos.coords.latitude}`);
+      lines.push(`coords.lng: ${pos.coords.longitude}`);
+      lines.push(`coords.accuracy_m: ${pos.coords.accuracy}`);
+      lines.push(`coords.altitude: ${pos.coords.altitude ?? 'null'}`);
+      lines.push(`coords.altitudeAccuracy: ${pos.coords.altitudeAccuracy ?? 'null'}`);
+      lines.push(`coords.heading: ${pos.coords.heading ?? 'null'}`);
+      lines.push(`coords.speed: ${pos.coords.speed ?? 'null'}`);
+      lines.push(`position.timestamp: ${new Date(pos.timestamp).toISOString()}`);
+      setDiagOutput(lines);
+      setStatus('✅ 定位診斷完成', 'success');
+    } catch (err) {
+      lines.push(`error.name: ${err?.name ?? 'Error'}`);
+      lines.push(`error.message: ${err?.message ?? String(err)}`);
+      setDiagOutput(lines);
+      setStatus(`❌ 定位診斷失敗：${err.message}`, 'error');
+    }
   }
 
   async function getBestGeolocationPosition() {
-    const requests = [
-      withTimeout(
-        getCurrentPositionAsync({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }),
-        12000,
-        '定位逾時'
-      ),
-      withTimeout(
-        getCurrentPositionAsync({ enableHighAccuracy: false, timeout: 6000, maximumAge: 0 }),
-        8000,
-        '定位逾時'
-      )
-    ];
-
-    const settled = await Promise.allSettled(requests);
-    const ok = settled
-      .filter((r) => r.status === 'fulfilled')
-      .map((r) => r.value);
-
-    if (ok.length > 0) {
-      return ok.reduce((best, cur) =>
-        (cur.coords.accuracy ?? Infinity) < (best.coords.accuracy ?? Infinity) ? cur : best
-      );
-    }
-
-    const firstError = settled.find((r) => r.status === 'rejected');
-    throw firstError && firstError.reason instanceof Error
-      ? firstError.reason
-      : new Error('Unable to get location');
+    // GPS-first strategy: do not fall back to low-accuracy network positioning.
+    return withTimeout(
+      getCurrentPositionAsync({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }),
+      12000,
+      '定位逾時'
+    );
   }
 
   async function doSearch(lat, lng) {
@@ -251,6 +291,7 @@
     const source = document.querySelector('input[name="loc-source"]:checked').value;
 
     if (source === 'manual') {
+      setGpsInfo('目前為手動輸入模式');
       const lat = parseFloat(inputLat.value);
       const lng = parseFloat(inputLng.value);
       if (isNaN(lat) || isNaN(lng)) {
@@ -263,32 +304,25 @@
         setStatus('❌ 瀏覽器不支援定位，請改用手動輸入', 'error');
         return;
       }
-      setStatus('📡 正在取得您的位置（最多約 12 秒）…', 'info');
+      setStatus('📡 正在透過手機 GPS 取得位置（最多約 12 秒）…', 'info');
       (async () => {
         try {
           const pos = await getBestGeolocationPosition();
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           const acc = pos.coords.accuracy ?? Infinity;
+          const now = new Date();
+          setGpsInfo(
+            `${lat.toFixed(6)}, ${lng.toFixed(6)} | 精度 ±${Math.round(acc)} m | ${now.toLocaleTimeString('zh-TW', { hour12: false })}`
+          );
 
-          // If location confidence is too low, avoid searching a likely wrong area.
-          if (acc > 50000) {
+          // Require reasonably accurate GPS to avoid wrong-city/country results.
+          if (acc > 3000) {
             document.querySelector('input[name="loc-source"][value="manual"]').checked = true;
             manualCoords.style.display = '';
             inputLat.value = lat.toFixed(6);
             inputLng.value = lng.toFixed(6);
-            setStatus(`❌ 定位精度過低（約 ±${Math.round(acc / 1000)} km），請改用手動輸入或點地圖選位置`, 'error');
-            return;
-          }
-
-          // On some desktop/network setups, IP geolocation may jump to a wrong country.
-          // For this Taiwan-targeted use case, force manual confirmation when outside Taiwan.
-          if (!isWithinTaiwanBounds(lat, lng)) {
-            document.querySelector('input[name="loc-source"][value="manual"]').checked = true;
-            manualCoords.style.display = '';
-            inputLat.value = lat.toFixed(6);
-            inputLng.value = lng.toFixed(6);
-            setStatus(`⚠️ 自動定位疑似錯誤（${lat.toFixed(4)}, ${lng.toFixed(4)}），已切換手動模式，請修正座標或點地圖`, 'warn');
+            setStatus(`❌ GPS 精度不足（約 ±${Math.round(acc)} m），請開啟精確定位或改用手動輸入`, 'error');
             return;
           }
 
@@ -298,6 +332,10 @@
         }
       })();
     }
+  });
+
+  diagBtn.addEventListener('click', () => {
+    runLocationDiagnostics();
   });
 
   // ── Click map to set manual location ─────────────────────────────────────

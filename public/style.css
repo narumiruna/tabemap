@@ -69,6 +69,19 @@ select:focus { border-color: #3b82f6; background: #fff; }
 }
 .btn-search:hover:not(:disabled) { background: #b91c1c; }
 .btn-search:disabled { opacity: .5; cursor: not-allowed; }
+.btn-diag {
+  background: #334155;
+  color: #fff;
+  border: none;
+  border-radius: .4rem;
+  padding: .55rem 1rem;
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+  white-space: nowrap;
+}
+.btn-diag:hover { background: #1e293b; }
 
 /* ── Status bar ──────────────────────────────────────────────────────────── */
 .status-bar {
@@ -82,6 +95,23 @@ select:focus { border-color: #3b82f6; background: #fff; }
 .status-bar.success { background: #f0fdf4; color: #15803d; }
 .status-bar.warn    { background: #fefce8; color: #a16207; }
 .status-bar.error   { background: #fef2f2; color: #b91c1c; }
+.gps-info {
+  margin-top: .4rem;
+  font-size: .8rem;
+  color: #475569;
+}
+.diag-output {
+  margin-top: .5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: .35rem;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: .6rem .7rem;
+  font-size: .78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 /* ── Map ─────────────────────────────────────────────────────────────────── */
 #map {
