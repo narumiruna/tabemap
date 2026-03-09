@@ -99,7 +99,7 @@
       return;
     }
 
-    const radius = parseInt(radiusSelect.value, 10);
+    let missingLocationCount = 0;
 
     restaurants.forEach((r, idx) => {
       // ── Card ──
@@ -121,6 +121,7 @@
               <span class="score-badge ${scoreClass}">★ ${scoreText}</span>
               ${r.genre  ? `<span class="tag">${esc(r.genre)}</span>` : ''}
               ${r.budget ? `<span class="tag">💴 ${esc(r.budget)}</span>` : ''}
+              ${r.lat == null || r.lng == null ? `<span class="tag tag-warn">位置資料不足</span>` : ''}
             </div>
             ${r.address ? `<p class="rst-address">📌 ${esc(r.address)}</p>` : ''}
           </div>
@@ -129,28 +130,26 @@
       const capturedIdx = idx;
       card.addEventListener('click', () => {
         const m = restaurantMarkers[capturedIdx];
-        if (m) { map.setView(m.getLatLng(), 17); m.openPopup(); }
+        if (m) {
+          map.setView(m.getLatLng(), 17);
+          m.openPopup();
+        } else {
+          setStatus('⚠️ 此餐廳缺少座標，請點卡片標題前往店家頁查看詳細地址', 'warn');
+        }
         card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
 
       restaurantList.appendChild(card);
 
       // ── Map marker ──
-      // Use per-restaurant coordinates when available (scraped from data-lat /
-      // data-lng on each Tabelog card).  Fall back to a spread ring around the
-      // search centre for the rare case where the data is absent.
-      let mLat, mLng;
-      if (r.lat != null && r.lng != null) {
-        mLat = r.lat;
-        mLng = r.lng;
-      } else {
-        const angle  = (idx / Math.max(restaurants.length, 1)) * 2 * Math.PI;
-        const spread = Math.min(radius * 0.00001, 0.002);
-        mLat = lat + Math.cos(angle) * spread * (0.3 + 0.7 * ((idx % 5) / 5));
-        mLng = lng + Math.sin(angle) * spread * (0.3 + 0.7 * ((idx % 5) / 5));
+      // Only place markers when we have real coordinates.
+      if (r.lat == null || r.lng == null) {
+        missingLocationCount += 1;
+        restaurantMarkers.push(null);
+        return;
       }
 
-      const m = L.marker([mLat, mLng], {
+      const m = L.marker([r.lat, r.lng], {
         icon: L.divIcon({
           className: 'rst-marker',
           html: `<span>${idx + 1}</span>`,
@@ -169,6 +168,10 @@
 
       restaurantMarkers.push(m);
     });
+
+    if (missingLocationCount > 0) {
+      resultCount.textContent = `（${restaurants.length} 間，${missingLocationCount} 間無座標）`;
+    }
 
     resultsSection.style.display = '';
   }

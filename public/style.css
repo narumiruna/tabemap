@@ -197,6 +197,10 @@ select:focus { border-color: #3b82f6; background: #fff; }
   padding: .15rem .45rem;
   border-radius: 999px;
 }
+.tag-warn {
+  background: #fef3c7;
+  color: #92400e;
+}
 
 .rst-address { font-size: .78rem; color: #64748b; margin-top: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
