@@ -26,6 +26,11 @@
   const resultsSection = document.getElementById('results-section');
   const restaurantList = document.getElementById('restaurant-list');
   const resultCount    = document.getElementById('result-count');
+  const GPS_FIRST_OPTIONS = Object.freeze({
+    enableHighAccuracy: true,
+    timeout: 12000,
+    maximumAge: 0
+  });
 
   // ── Location source toggle ────────────────────────────────────────────────
   document.querySelectorAll('input[name="loc-source"]').forEach(radio => {
@@ -220,12 +225,11 @@
       lines.push('permission api: unavailable');
     }
 
-    const options = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
-    lines.push(`request: ${JSON.stringify(options)}`);
+    lines.push(`request: ${JSON.stringify(GPS_FIRST_OPTIONS)}`);
 
     try {
       const pos = await withTimeout(
-        getCurrentPositionAsync(options),
+        getCurrentPositionAsync(GPS_FIRST_OPTIONS),
         12000,
         '定位逾時'
       );
@@ -248,12 +252,21 @@
   }
 
   async function getBestGeolocationPosition() {
-    // GPS-first strategy: do not fall back to low-accuracy network positioning.
-    return withTimeout(
-      getCurrentPositionAsync({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }),
-      12000,
-      '定位逾時'
-    );
+    // GPS-first only strategy: retry once with the same high-accuracy options.
+    // We intentionally do not degrade to low-accuracy network positioning.
+    try {
+      return await withTimeout(
+        getCurrentPositionAsync(GPS_FIRST_OPTIONS),
+        13000,
+        '定位逾時'
+      );
+    } catch {
+      return withTimeout(
+        getCurrentPositionAsync(GPS_FIRST_OPTIONS),
+        13000,
+        '定位逾時'
+      );
+    }
   }
 
   async function doSearch(lat, lng) {
