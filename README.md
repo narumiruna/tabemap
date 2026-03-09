@@ -26,7 +26,7 @@ npm install
 npm run dev
 ```
 
-伺服器啟動後開啟瀏覽器前往 <http://localhost:3000>。
+伺服器啟動後開啟瀏覽器前往 <http://localhost:7751>。
 
 ### 正式模式
 
@@ -37,15 +37,37 @@ npm run build   # 編譯至 dist/
 npm start       # 啟動 dist/server.js
 ```
 
-伺服器預設監聽 port `3000`。若要更改，可透過環境變數設定：
+伺服器預設監聽 port `7751`。若要更改，可透過環境變數設定：
 
 ```bash
 PORT=8080 npm start
 ```
 
+## Docker 部署
+
+可使用 Docker Compose 直接在主機啟動：
+
+```bash
+docker compose up -d --build
+```
+
+預設對外提供 `http://localhost:7751`。
+
+查看即時日誌：
+
+```bash
+docker compose logs -f
+```
+
+停止服務：
+
+```bash
+docker compose down
+```
+
 ## 網頁操作說明
 
-開啟 <http://localhost:3000> 後：
+開啟 <http://localhost:7751> 後：
 
 1. **位置來源**
    - **自動偵測**（預設）：點擊「搜尋」時瀏覽器會請求您授予位置權限，取得 GPS 座標。
@@ -79,7 +101,7 @@ GET /api/restaurants
 ### 範例
 
 ```bash
-curl "http://localhost:3000/api/restaurants?lat=35.6812&lng=139.7671&radius=1000&min_score=3.5"
+curl "http://localhost:7751/api/restaurants?lat=35.6812&lng=139.7671&radius=1000&min_score=3.5"
 ```
 
 ### 回應格式

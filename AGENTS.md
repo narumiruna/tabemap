@@ -12,7 +12,7 @@ Keep backend logic in `src/` and browser-only logic in `public/`. Do not mix scr
 
 ## Build, Test, and Development Commands
 - `npm install`: install dependencies.
-- `npm run dev`: start local development server via `tsx` (`http://localhost:3000` by default).
+- `npm run dev`: start local development server via `tsx` (`http://localhost:7751` by default).
 - `npm run build`: compile TypeScript to `dist/` using `tsc`.
 - `npm start`: run compiled server from `dist/server.js`.
 - `PORT=8080 npm start`: run production build on a custom port.

@@ -1,0 +1,12 @@
+services:
+  moo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: moo-app
+    environment:
+      NODE_ENV: production
+      PORT: 7751
+    ports:
+      - "7751:7751"
+    restart: unless-stopped

@@ -3,7 +3,7 @@ import express, { Request, Response } from "express";
 import { fetchRestaurants } from "./scraper.js";
 
 const app = express();
-const PORT = process.env.PORT ?? 3000;
+const PORT = process.env.PORT ?? 7751;
 
 // Serve static frontend files
 app.use(express.static(path.join(import.meta.dirname, "..", "public")));
