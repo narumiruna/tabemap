@@ -162,6 +162,57 @@
   }
 
   // ── Main search ───────────────────────────────────────────────────────────
+  function getCurrentPositionAsync(options) {
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, options);
+    });
+  }
+
+  function withTimeout(promise, ms, message) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(message)), ms);
+      })
+    ]);
+  }
+
+  function isWithinTaiwanBounds(lat, lng) {
+    // Rough bounding box for Taiwan main area + nearby islands.
+    return lat >= 20.5 && lat <= 26.6 && lng >= 118.0 && lng <= 123.5;
+  }
+
+  async function getBestGeolocationPosition() {
+    const requests = [
+      withTimeout(
+        getCurrentPositionAsync({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }),
+        12000,
+        '定位逾時'
+      ),
+      withTimeout(
+        getCurrentPositionAsync({ enableHighAccuracy: false, timeout: 6000, maximumAge: 0 }),
+        8000,
+        '定位逾時'
+      )
+    ];
+
+    const settled = await Promise.allSettled(requests);
+    const ok = settled
+      .filter((r) => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    if (ok.length > 0) {
+      return ok.reduce((best, cur) =>
+        (cur.coords.accuracy ?? Infinity) < (best.coords.accuracy ?? Infinity) ? cur : best
+      );
+    }
+
+    const firstError = settled.find((r) => r.status === 'rejected');
+    throw firstError && firstError.reason instanceof Error
+      ? firstError.reason
+      : new Error('Unable to get location');
+  }
+
   async function doSearch(lat, lng) {
     const radius   = parseInt(radiusSelect.value, 10);
     const minScore = parseFloat(minScoreInput.value);
@@ -212,12 +263,40 @@
         setStatus('❌ 瀏覽器不支援定位，請改用手動輸入', 'error');
         return;
       }
-      setStatus('📡 正在取得您的位置…', 'info');
-      navigator.geolocation.getCurrentPosition(
-        pos => doSearch(pos.coords.latitude, pos.coords.longitude),
-        err => setStatus(`❌ 無法取得位置（${err.message}），請改用手動輸入`, 'error'),
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
+      setStatus('📡 正在取得您的位置（最多約 12 秒）…', 'info');
+      (async () => {
+        try {
+          const pos = await getBestGeolocationPosition();
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const acc = pos.coords.accuracy ?? Infinity;
+
+          // If location confidence is too low, avoid searching a likely wrong area.
+          if (acc > 50000) {
+            document.querySelector('input[name="loc-source"][value="manual"]').checked = true;
+            manualCoords.style.display = '';
+            inputLat.value = lat.toFixed(6);
+            inputLng.value = lng.toFixed(6);
+            setStatus(`❌ 定位精度過低（約 ±${Math.round(acc / 1000)} km），請改用手動輸入或點地圖選位置`, 'error');
+            return;
+          }
+
+          // On some desktop/network setups, IP geolocation may jump to a wrong country.
+          // For this Taiwan-targeted use case, force manual confirmation when outside Taiwan.
+          if (!isWithinTaiwanBounds(lat, lng)) {
+            document.querySelector('input[name="loc-source"][value="manual"]').checked = true;
+            manualCoords.style.display = '';
+            inputLat.value = lat.toFixed(6);
+            inputLng.value = lng.toFixed(6);
+            setStatus(`⚠️ 自動定位疑似錯誤（${lat.toFixed(4)}, ${lng.toFixed(4)}），已切換手動模式，請修正座標或點地圖`, 'warn');
+            return;
+          }
+
+          doSearch(lat, lng);
+        } catch (err) {
+          setStatus(`❌ 無法取得位置（${err.message}），請改用手動輸入`, 'error');
+        }
+      })();
     }
   });
 
