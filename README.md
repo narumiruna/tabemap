@@ -13,8 +13,8 @@
 ## 安裝
 
 ```bash
-git clone https://github.com/nationalteam/moo.git
-cd moo
+git clone https://github.com/narumiruna/tabemap.git
+cd tabemap
 npm install
 ```
 

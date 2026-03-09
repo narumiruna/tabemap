@@ -1,9 +1,9 @@
 services:
-  moo:
+  tabemap:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: moo-app
+    container_name: tabemap-app
     environment:
       NODE_ENV: production
       PORT: 7751
