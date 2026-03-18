@@ -8,6 +8,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
@@ -253,10 +254,145 @@ select:focus { border-color: #3b82f6; background: #fff; }
 .popup-content a { color: #dc2626; }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .search-panel,
+  .results-section {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .field-group {
+    min-width: 0;
+    flex: 1 1 180px;
+  }
+}
+
 @media (max-width: 640px) {
-  .search-row { flex-direction: column; align-items: stretch; }
-  .btn-search { width: 100%; }
-  .coords-row { flex-direction: column; }
-  .coords-row input { width: 100%; }
-  #map { flex: 0 0 300px; }
+  .app-header {
+    padding: .85rem 1rem;
+  }
+
+  .app-header h1 {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
+
+  .subtitle {
+    font-size: .8rem;
+  }
+
+  .search-panel {
+    padding: .75rem .85rem;
+    position: sticky;
+    top: 0;
+    z-index: 800;
+  }
+
+  .search-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: .75rem;
+  }
+
+  .field-group {
+    width: 100%;
+  }
+
+  .field-label {
+    font-size: .72rem;
+  }
+
+  .radio-group {
+    flex-direction: column;
+    gap: .5rem;
+  }
+
+  .radio-group label {
+    min-height: 40px;
+    font-size: .95rem;
+  }
+
+  .coords-row {
+    flex-direction: column;
+    gap: .4rem;
+  }
+
+  .coords-row input {
+    width: 100%;
+  }
+
+  .btn-search,
+  .btn-diag {
+    width: 100%;
+    min-height: 44px;
+    font-size: 1rem;
+  }
+
+  input[type="number"],
+  select {
+    min-height: 44px;
+    font-size: 1rem;
+    padding: .55rem .7rem;
+  }
+
+  .status-bar {
+    font-size: .82rem;
+    line-height: 1.45;
+  }
+
+  .gps-info {
+    font-size: .78rem;
+    line-height: 1.4;
+  }
+
+  #map {
+    height: clamp(260px, 42dvh, 380px);
+  }
+
+  .results-section {
+    padding: .85rem .85rem 1.4rem;
+  }
+
+  .results-section h2 {
+    font-size: 1rem;
+    margin-bottom: .6rem;
+  }
+
+  .restaurant-list {
+    grid-template-columns: 1fr;
+    gap: .75rem;
+  }
+
+  .rst-card-inner {
+    padding: .65rem;
+    gap: .6rem;
+  }
+
+  .rst-thumb,
+  .rst-thumb-placeholder {
+    width: 78px;
+    height: 72px;
+  }
+
+  .rst-name {
+    font-size: .92rem;
+  }
+
+  .rst-address {
+    font-size: .75rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .app-header h1 {
+    font-size: 1.12rem;
+  }
+
+  .subtitle {
+    display: none;
+  }
+
+  #map {
+    height: clamp(230px, 38dvh, 320px);
+  }
 }
