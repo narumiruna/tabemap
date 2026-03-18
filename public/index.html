@@ -4,95 +4,53 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tabelog 附近高評分餐廳</title>
-  <!-- Serve Leaflet from the local node_modules via the /leaflet route -->
   <link rel="stylesheet" href="/leaflet/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="app-header">
-    <h1>🍜 Tabelog 附近高評分餐廳</h1>
-    <p class="subtitle">
-      搜尋
-      <a href="https://tabelog.com" target="_blank" rel="noopener">食べログ（日文版）</a>
-      附近評分夠高的餐廳
-    </p>
-  </header>
+  <main class="map-screen" aria-label="地圖主畫面">
+    <div id="map"></div>
 
-  <!-- ── Search panel ── -->
-  <section class="search-panel">
-    <div class="controls-grid">
-      <section class="control-card">
-        <h2 class="control-title">定位設定</h2>
+    <div id="map-hint" class="map-hint" aria-live="polite">移動地圖或點選位置後即可搜尋</div>
 
-        <div class="field-group">
-          <label class="field-label">位置來源</label>
-          <div class="radio-group">
-            <label><input type="radio" name="loc-source" value="gps" checked /> 自動定位（GPS）</label>
-            <label><input type="radio" name="loc-source" value="manual" /> 手動座標</label>
-          </div>
-          <p id="loc-state" class="loc-state is-pending">定位狀態：尚未定位</p>
-          <div id="loc-actions" class="loc-actions" hidden>
-            <button id="retry-loc-btn" class="btn-loc-primary" type="button">重新定位</button>
-            <button id="switch-manual-btn" class="btn-secondary" type="button">改用手動輸入</button>
-          </div>
-        </div>
+    <button id="search-area-btn" class="search-area-btn" type="button" hidden>在此區域搜尋</button>
+    <button id="open-sheet-btn" class="floating-chip" type="button">篩選與設定</button>
+    <button id="gps-fab-btn" class="fab" type="button" aria-label="使用目前位置">◎</button>
 
-        <div class="field-group" id="manual-coords" style="display:none">
-          <label class="field-label">緯度 / 經度</label>
-          <div class="coords-row">
-            <input type="number" id="input-lat" placeholder="緯度 (e.g. 35.6812)" step="any" />
-            <input type="number" id="input-lng" placeholder="經度 (e.g. 139.7671)" step="any" />
-          </div>
-        </div>
+    <section id="bottom-sheet" class="bottom-sheet" aria-label="篩選設定">
+      <button id="sheet-header" class="sheet-header" type="button" aria-expanded="false">
+        <span class="sheet-handle" aria-hidden="true"></span>
+        <span id="sheet-summary" class="sheet-summary">1 km ・ 3.5+</span>
+      </button>
 
-        <button id="diag-btn" class="btn-diag-link" type="button" hidden>定位有問題？執行診斷</button>
-      </section>
+      <div class="sheet-content">
+        <section class="sheet-block" aria-label="篩選條件">
+          <h2>篩選</h2>
+          <label class="field-label" for="radius-select">搜尋半徑</label>
+          <select id="radius-select">
+            <option value="300">300 m</option>
+            <option value="500">500 m</option>
+            <option value="1000" selected>1 km</option>
+            <option value="3000">3 km</option>
+            <option value="5000">5 km</option>
+          </select>
 
-      <section class="control-card">
-        <h2 class="control-title">搜尋條件</h2>
+          <label class="field-label" for="min-score">最低評分</label>
+          <select id="min-score">
+            <option value="3.0">3.0+</option>
+            <option value="3.3">3.3+</option>
+            <option value="3.5" selected>3.5+</option>
+            <option value="3.8">3.8+</option>
+            <option value="4.0">4.0+</option>
+          </select>
+        </section>
+      </div>
+    </section>
+  </main>
 
-        <div class="search-row">
-          <div class="field-group">
-            <label class="field-label" for="radius-select">搜尋半徑</label>
-            <select id="radius-select">
-              <option value="300">300 m</option>
-              <option value="500">500 m</option>
-              <option value="1000" selected>1 km（預設）</option>
-              <option value="3000">3 km</option>
-              <option value="5000">5 km</option>
-            </select>
-            <p class="field-help">範圍越大，結果通常越多。</p>
-          </div>
-
-          <div class="field-group">
-            <label class="field-label" for="min-score">最低評分</label>
-            <select id="min-score">
-              <option value="3.0">3.0（寬鬆）</option>
-              <option value="3.3">3.3</option>
-              <option value="3.5" selected>3.5（預設）</option>
-              <option value="3.8">3.8</option>
-              <option value="4.0">4.0（嚴格）</option>
-            </select>
-            <p class="field-help">門檻越高，結果通常越少。</p>
-          </div>
-        </div>
-
-        <p id="search-hint" class="search-hint" aria-live="polite"></p>
-        <button id="search-btn" class="btn-search">開始搜尋</button>
-      </section>
-    </div>
-
-    <div id="status-bar" class="status-bar" aria-live="polite"></div>
-    <pre id="diag-output" class="diag-output" style="display:none"></pre>
-  </section>
-
-  <!-- ── Map ── -->
-  <div id="map-state" class="map-state" aria-live="polite">地圖：等待定位後顯示目前定位點，可點擊地圖手動選位置</div>
-  <div id="map"></div>
-
-  <!-- ── Results ── -->
   <section id="results-section" class="results-section" style="display:none">
     <h2>搜尋結果 <span id="result-count" class="result-count"></span></h2>
+    <div id="status-bar" class="status-bar" aria-live="polite"></div>
     <div id="restaurant-list" class="restaurant-list"></div>
   </section>
 

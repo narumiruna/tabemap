@@ -1,13 +1,87 @@
 (() => {
-  'use strict';
+  "use strict";
 
-  // ── Persisted map view ────────────────────────────────────────────────────
   const MAP_VIEW_STORAGE_KEY = "tabemap:last-map-view";
-  const DEFAULT_MAP_VIEW = Object.freeze({
-    lat: 34.4902,
-    lng: 136.7091,
-    zoom: 14
-  });
+  const DEFAULT_MAP_VIEW = Object.freeze({ lat: 34.4902, lng: 136.7091, zoom: 14 });
+  const GPS_OPTIONS = Object.freeze({ enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+
+  const appState = {
+    location: null,
+    hasMapChanged: false,
+    isSearching: false,
+    sheetExpanded: false,
+    radius: 1000,
+    minScore: 3.5,
+    hasGpsError: false
+  };
+
+  const mapHint = document.getElementById("map-hint");
+  const searchAreaBtn = document.getElementById("search-area-btn");
+  const openSheetBtn = document.getElementById("open-sheet-btn");
+  const gpsFabBtn = document.getElementById("gps-fab-btn");
+
+  const bottomSheet = document.getElementById("bottom-sheet");
+  const sheetHeader = document.getElementById("sheet-header");
+  const sheetSummary = document.getElementById("sheet-summary");
+
+  const radiusSelect = document.getElementById("radius-select");
+  const minScoreSelect = document.getElementById("min-score");
+
+  const resultsSection = document.getElementById("results-section");
+  const resultCount = document.getElementById("result-count");
+  const statusBar = document.getElementById("status-bar");
+  const restaurantList = document.getElementById("restaurant-list");
+
+  let userMarker = null;
+  let bootstrapping = true;
+
+  const map = initMap();
+
+  function initMap() {
+    const view = loadLastMapView();
+    const mapInstance = L.map("map").setView([view.lat, view.lng], view.zoom);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(mapInstance);
+
+    mapInstance.on("click", (e) => {
+      appState.location = { lat: e.latlng.lat, lng: e.latlng.lng };
+      appState.hasMapChanged = true;
+      appState.hasGpsError = false;
+      updateUI();
+    });
+
+    mapInstance.on("moveend", () => {
+      saveMapView(mapInstance);
+      if (bootstrapping) return;
+      const center = mapInstance.getCenter();
+      appState.location = { lat: center.lat, lng: center.lng };
+      appState.hasMapChanged = true;
+      updateUI();
+    });
+
+    mapInstance.on("zoomend", () => {
+      if (bootstrapping) return;
+      const center = mapInstance.getCenter();
+      appState.location = { lat: center.lat, lng: center.lng };
+      appState.hasMapChanged = true;
+      updateUI();
+    });
+
+    mapInstance.whenReady(() => {
+      setTimeout(() => {
+        mapInstance.invalidateSize();
+        bootstrapping = false;
+      }, 0);
+    });
+
+    window.addEventListener("resize", () => mapInstance.invalidateSize());
+    window.addEventListener("orientationchange", () => setTimeout(() => mapInstance.invalidateSize(), 120));
+
+    return mapInstance;
+  }
 
   function loadLastMapView() {
     try {
@@ -30,615 +104,217 @@
   function saveMapView(mapInstance) {
     try {
       const center = mapInstance.getCenter();
-      const zoom = mapInstance.getZoom();
       localStorage.setItem(
         MAP_VIEW_STORAGE_KEY,
-        JSON.stringify({ lat: center.lat, lng: center.lng, zoom })
+        JSON.stringify({ lat: center.lat, lng: center.lng, zoom: mapInstance.getZoom() })
       );
     } catch {
-      // Ignore storage failures (private mode/quota/security policy).
+      // ignore
     }
   }
 
-  // ── Map init ──────────────────────────────────────────────────────────────
-  const initialMapView = loadLastMapView();
-  const map = L.map('map').setView([initialMapView.lat, initialMapView.lng], initialMapView.zoom);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  }).addTo(map);
-
-  let userMarker = null;
-  let restaurantMarkers = [];
-  let radiusCircle = null;
-
-  // ── DOM refs ──────────────────────────────────────────────────────────────
-  const statusBar      = document.getElementById('status-bar');
-  const locState       = document.getElementById('loc-state');
-  const mapState       = document.getElementById('map-state');
-  const locActions     = document.getElementById('loc-actions');
-  const retryLocBtn    = document.getElementById('retry-loc-btn');
-  const switchManualBtn = document.getElementById('switch-manual-btn');
-  const searchHint     = document.getElementById('search-hint');
-  const searchBtn      = document.getElementById('search-btn');
-  const diagBtn        = document.getElementById('diag-btn');
-  const diagOutput     = document.getElementById('diag-output');
-  const manualCoords   = document.getElementById('manual-coords');
-  const inputLat       = document.getElementById('input-lat');
-  const inputLng       = document.getElementById('input-lng');
-  const radiusSelect   = document.getElementById('radius-select');
-  const minScoreInput  = document.getElementById('min-score');
-  const resultsSection = document.getElementById('results-section');
-  const restaurantList = document.getElementById('restaurant-list');
-  const resultCount    = document.getElementById('result-count');
-  const GPS_FIRST_OPTIONS = Object.freeze({
-    enableHighAccuracy: true,
-    timeout: 12000,
-    maximumAge: 0
-  });
-  const SEARCH_DEFAULT_LABEL = '開始搜尋';
-
-  const locationModel = {
-    source: 'gps',
-    phase: 'idle', // idle | loading | success | error | manual
-    lat: null,
-    lng: null,
-    accuracy: null,
-    errorMessage: ''
-  };
-
-  // ── Location source toggle ────────────────────────────────────────────────
-  document.querySelectorAll('input[name="loc-source"]').forEach(radio => {
-    radio.addEventListener('change', () => {
-      manualCoords.style.display = radio.value === 'manual' ? '' : 'none';
-      if (!radio.checked) return;
-      if (radio.value === 'manual') {
-        locationModel.source = 'manual';
-        locationModel.phase = 'manual';
-        updateLocationUI();
-      } else {
-        locationModel.source = 'gps';
-        if (locationModel.phase !== 'success') {
-          locationModel.phase = 'idle';
-        }
-        updateLocationUI();
-        startGpsLocationFlow({ silent: false });
-      }
-    });
-  });
-
-  // ── Status helper ─────────────────────────────────────────────────────────
-  function setStatus(msg, type = 'info') {
-    statusBar.textContent = msg;
-    statusBar.className = 'status-bar ' + type;
-  }
-
-  function setLocationState(msg, state = 'pending') {
-    locState.textContent = msg;
-    locState.className = `loc-state is-${state}`;
-  }
-
-  function setMapState(msg, state = 'pending') {
-    mapState.textContent = msg;
-    mapState.className = `map-state is-${state}`;
-  }
-
-  function clearStatus() {
-    statusBar.textContent = '';
-    statusBar.className = 'status-bar info';
-  }
-
-  function normalizeGeoError(err) {
-    const message = String(err?.message || '').toLowerCase();
-    if (err?.code === 1 || message.includes('denied') || message.includes('permission')) {
-      return '未允許定位權限';
-    }
-    if (err?.code === 3 || message.includes('timeout') || message.includes('逾時')) {
-      return '定位逾時';
-    }
-    if (err?.code === 2 || message.includes('unavailable')) {
-      return '目前無法取得定位';
-    }
-    return '目前無法定位，請重試';
-  }
-
-  function updateSearchButtonState() {
-    searchHint.textContent = '';
-    if (locationModel.source === 'manual') {
-      const lat = parseFloat(inputLat.value);
-      const lng = parseFloat(inputLng.value);
-      const invalidManualCoords = Number.isNaN(lat) || Number.isNaN(lng);
-      searchBtn.disabled = invalidManualCoords;
-      searchBtn.textContent = SEARCH_DEFAULT_LABEL;
-      if (invalidManualCoords) {
-        searchHint.textContent = '需先輸入有效座標，或點擊地圖選位置';
-      }
-      return;
-    }
-    searchBtn.disabled = locationModel.phase !== 'success';
-    if (locationModel.phase === 'loading') {
-      searchBtn.textContent = '定位中...';
-      searchHint.textContent = '需先取得位置才能開始搜尋';
-    } else if (locationModel.phase !== 'success') {
-      searchHint.textContent = '需先取得位置或改用手動輸入';
-    } else {
-      searchBtn.textContent = SEARCH_DEFAULT_LABEL;
-    }
-  }
-
-  function updateLocationUI() {
-    locActions.hidden = true;
-    if (locationModel.source === 'manual') {
-      setLocationState('定位狀態：手動模式（使用輸入座標或地圖選點）', 'manual');
-      setMapState('地圖：手動模式，可點地圖設定座標', 'manual');
-      updateSearchButtonState();
-      return;
-    }
-
-    if (locationModel.phase === 'loading') {
-      setLocationState('定位狀態：GPS 定位中...', 'loading');
-      setMapState('地圖：等待 GPS 定位完成', 'pending');
-      updateSearchButtonState();
-      return;
-    }
-
-    if (locationModel.phase === 'success') {
-      setLocationState(`定位狀態：已定位（±${Math.round(locationModel.accuracy ?? 0)} m）`, 'success');
-      setMapState('地圖：已顯示目前定位點', 'success');
-      updateSearchButtonState();
-      return;
-    }
-
-    if (locationModel.phase === 'error') {
-      setLocationState(`定位狀態：定位失敗（${locationModel.errorMessage || '請重試'}）`, 'error');
-      setMapState('地圖：可點擊地圖手動選位置，或改用手動輸入', 'pending');
-      locActions.hidden = false;
-      updateSearchButtonState();
-      return;
-    }
-
-    setLocationState('定位狀態：尚未定位', 'pending');
-    setMapState('地圖：等待定位後顯示目前定位點，可點擊地圖手動選位置', 'pending');
-    updateSearchButtonState();
-  }
-
-  function setDiagHelpVisible(visible) {
-    diagBtn.hidden = !visible;
-  }
-
-  function setDiagOutput(lines) {
-    diagOutput.style.display = '';
-    diagOutput.textContent = lines.join('\n');
-  }
-
-  // ── Clear map restaurant layers ───────────────────────────────────────────
-  function clearRestaurantLayers() {
-    restaurantMarkers.forEach(m => map.removeLayer(m));
-    restaurantMarkers = [];
-    if (radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
-  }
-
-  function buildUserMarkerIcon(color = "red") {
-    const safeColor = color === "green" ? "green" : "red";
-    return L.divIcon({
-      className: "user-marker",
-      html: `<span class="user-pin user-pin-${safeColor}"></span>`,
-      iconSize: [20, 30],
-      iconAnchor: [10, 30]
-    });
-  }
-
-  // ── Place user marker ─────────────────────────────────────────────────────
-  function placeUserMarker(lat, lng, color = "red", options = {}) {
-    const { centerMap = true } = options;
-    if (userMarker) map.removeLayer(userMarker);
-    userMarker = L.marker([lat, lng], {
-      icon: buildUserMarkerIcon(color)
-    }).addTo(map).bindPopup('您的位置');
-    if (centerMap) {
-      map.setView([lat, lng], 15);
-    }
-  }
-
-  function clearUserMarker() {
-    if (userMarker) {
-      map.removeLayer(userMarker);
-      userMarker = null;
-    }
-  }
-
-  // ── Draw radius circle ────────────────────────────────────────────────────
-  function drawRadius(lat, lng, radiusMeters) {
-    if (radiusCircle) map.removeLayer(radiusCircle);
-    radiusCircle = L.circle([lat, lng], {
-      radius: radiusMeters,
-      color: '#3b82f6',
-      fillColor: '#93c5fd',
-      fillOpacity: 0.12,
-      weight: 2
-    }).addTo(map);
-  }
-
-  // ── Escape HTML ───────────────────────────────────────────────────────────
-  function esc(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  // ── Render results ────────────────────────────────────────────────────────
-  function renderRestaurants(restaurants, lat, lng) {
-    restaurantList.innerHTML = '';
-    resultCount.textContent = `（${restaurants.length} 間）`;
-
-    if (restaurants.length === 0) {
-      restaurantList.innerHTML = '<p class="no-results">此範圍內找不到符合條件的餐廳。</p>';
-      resultsSection.style.display = '';
-      return;
-    }
-
-    let missingLocationCount = 0;
-
-    restaurants.forEach((r, idx) => {
-      // ── Card ──
-      const card = document.createElement('article');
-      card.className = 'rst-card';
-
-      const scoreClass = r.score >= 4.0 ? 'score-gold' : r.score >= 3.5 ? 'score-green' : 'score-default';
-      const scoreText  = r.score != null ? r.score.toFixed(2) : '—';
-      const imgHtml    = r.image
-        ? `<img class="rst-thumb" src="${esc(r.image)}" alt="${esc(r.name)}" loading="lazy" onerror="this.style.display='none'" />`
-        : `<div class="rst-thumb rst-thumb-placeholder">🍽️</div>`;
-
-      card.innerHTML = `
-        <div class="rst-card-inner">
-          ${imgHtml}
-          <div class="rst-info">
-            <a class="rst-name" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a>
-            <div class="rst-meta">
-              <span class="score-badge ${scoreClass}">★ ${scoreText}</span>
-              ${r.genre  ? `<span class="tag">${esc(r.genre)}</span>` : ''}
-              ${r.budget ? `<span class="tag">💴 ${esc(r.budget)}</span>` : ''}
-              ${r.lat == null || r.lng == null ? `<span class="tag tag-warn">位置資料不足</span>` : ''}
-            </div>
-            ${r.address ? `<p class="rst-address">📌 ${esc(r.address)}</p>` : ''}
-          </div>
-        </div>`;
-
-      const capturedIdx = idx;
-      card.addEventListener('click', () => {
-        const m = restaurantMarkers[capturedIdx];
-        if (m) {
-          map.setView(m.getLatLng(), 17);
-          m.openPopup();
-        } else {
-          setStatus('⚠️ 此餐廳缺少座標，請點卡片標題前往店家頁查看詳細地址', 'warn');
-        }
-        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
-
-      restaurantList.appendChild(card);
-
-      // ── Map marker ──
-      // Only place markers when we have real coordinates.
-      if (r.lat == null || r.lng == null) {
-        missingLocationCount += 1;
-        restaurantMarkers.push(null);
-        return;
-      }
-
-      const m = L.marker([r.lat, r.lng], {
-        icon: L.divIcon({
-          className: 'rst-marker',
-          html: `<span>${idx + 1}</span>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14]
-        })
-      }).addTo(map);
-
-      m.bindPopup(`
-        <div class="popup-content">
-          <a href="${esc(r.url)}" target="_blank" rel="noopener"><b>${esc(r.name)}</b></a><br/>
-          <strong>★ ${scoreText}</strong>
-          ${r.genre   ? `<br/>${esc(r.genre)}` : ''}
-          ${r.address ? `<br/><small>${esc(r.address)}</small>` : ''}
-        </div>`);
-
-      restaurantMarkers.push(m);
-    });
-
-    if (missingLocationCount > 0) {
-      resultCount.textContent = `（${restaurants.length} 間，${missingLocationCount} 間無座標）`;
-    }
-
-    resultsSection.style.display = '';
-  }
-
-  // ── Main search ───────────────────────────────────────────────────────────
   function getCurrentPositionAsync(options) {
     return new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(resolve, reject, options);
     });
   }
 
-  function withTimeout(promise, ms, message) {
-    return Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        setTimeout(() => reject(new Error(message)), ms);
-      })
-    ]);
-  }
-
-  async function runLocationDiagnostics() {
-    const now = new Date();
-    const lines = [
-      `time: ${now.toISOString()}`,
-      `isSecureContext: ${String(window.isSecureContext)}`,
-      `userAgent: ${navigator.userAgent}`,
-    ];
-
-    if (!navigator.geolocation) {
-      lines.push('geolocation: unavailable');
-      setDiagOutput(lines);
-      setStatus('❌ 瀏覽器不支援定位', 'error');
-      setDiagHelpVisible(true);
-      if (locationModel.source === 'gps') {
-        locationModel.phase = 'error';
-        locationModel.errorMessage = '瀏覽器不支援定位';
-        updateLocationUI();
+  function renderMarker() {
+    if (!appState.location) {
+      if (userMarker) {
+        map.removeLayer(userMarker);
+        userMarker = null;
       }
       return;
     }
 
-    lines.push('geolocation: available');
+    const icon = L.divIcon({
+      className: "user-marker",
+      html: "<span style='display:block;width:16px;height:16px;border-radius:50%;background:#dc2626;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.25)'></span>",
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
 
-    if (navigator.permissions && navigator.permissions.query) {
-      try {
-        const result = await navigator.permissions.query({ name: 'geolocation' });
-        lines.push(`permission.state: ${result.state}`);
-      } catch {
-        lines.push('permission.state: unavailable');
-      }
+    if (userMarker) {
+      userMarker.setLatLng([appState.location.lat, appState.location.lng]);
     } else {
-      lines.push('permission api: unavailable');
-    }
-
-    lines.push(`request: ${JSON.stringify(GPS_FIRST_OPTIONS)}`);
-
-    try {
-      const pos = await withTimeout(
-        getCurrentPositionAsync(GPS_FIRST_OPTIONS),
-        12000,
-        '定位逾時'
-      );
-      lines.push(`coords.lat: ${pos.coords.latitude}`);
-      lines.push(`coords.lng: ${pos.coords.longitude}`);
-      lines.push(`coords.accuracy_m: ${pos.coords.accuracy}`);
-      lines.push(`coords.altitude: ${pos.coords.altitude ?? 'null'}`);
-      lines.push(`coords.altitudeAccuracy: ${pos.coords.altitudeAccuracy ?? 'null'}`);
-      lines.push(`coords.heading: ${pos.coords.heading ?? 'null'}`);
-      lines.push(`coords.speed: ${pos.coords.speed ?? 'null'}`);
-      lines.push(`position.timestamp: ${new Date(pos.timestamp).toISOString()}`);
-      setDiagOutput(lines);
-      setStatus('✅ 定位診斷完成', 'success');
-      setDiagHelpVisible(false);
-    } catch (err) {
-      lines.push(`error.name: ${err?.name ?? 'Error'}`);
-      lines.push(`error.message: ${err?.message ?? String(err)}`);
-      setDiagOutput(lines);
-      setStatus(`❌ 定位診斷失敗：${err.message}`, 'error');
-      setDiagHelpVisible(true);
+      userMarker = L.marker([appState.location.lat, appState.location.lng], { icon }).addTo(map);
     }
   }
 
-  async function getBestGeolocationPosition() {
-    // GPS-first only strategy: retry once with the same high-accuracy options.
-    // We intentionally do not degrade to low-accuracy network positioning.
-    try {
-      return await withTimeout(
-        getCurrentPositionAsync(GPS_FIRST_OPTIONS),
-        13000,
-        '定位逾時'
-      );
-    } catch {
-      return withTimeout(
-        getCurrentPositionAsync(GPS_FIRST_OPTIONS),
-        13000,
-        '定位逾時'
-      );
-    }
+  function updateSheetSummary() {
+    const radiusText = appState.radius >= 1000 ? `${appState.radius / 1000} km` : `${appState.radius} m`;
+    const scoreText = `${appState.minScore.toFixed(1)}+`;
+    sheetSummary.textContent = `${radiusText} ・ ${scoreText}`;
   }
 
-  async function startGpsLocationFlow({ silent = false } = {}) {
-    if (!navigator.geolocation) {
-      locationModel.phase = 'error';
-      locationModel.errorMessage = '瀏覽器不支援定位';
-      updateLocationUI();
-      setDiagHelpVisible(true);
-      if (!silent) clearStatus();
-      return false;
+  function updateMapHint() {
+    if (appState.hasGpsError) {
+      mapHint.textContent = "定位失敗，請改用地圖選點";
+      mapHint.style.display = "";
+      return;
     }
 
-    locationModel.phase = 'loading';
-    locationModel.errorMessage = '';
-    updateLocationUI();
-    setDiagHelpVisible(false);
-    if (!silent) {
-      setStatus('📡 正在以 GPS 優先高精度模式取得位置（最多約 12 秒）…', 'info');
-    }
-
-    try {
-      const pos = await getBestGeolocationPosition();
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-      const acc = pos.coords.accuracy ?? Infinity;
-
-      if (acc > 3000) {
-        locationModel.phase = 'error';
-        locationModel.errorMessage = `GPS 精度不足（±${Math.round(acc)} m）`;
-        locationModel.lat = null;
-        locationModel.lng = null;
-        locationModel.accuracy = null;
-        clearUserMarker();
-        updateLocationUI();
-        clearStatus();
-        setDiagHelpVisible(true);
-        return false;
-      }
-
-      locationModel.phase = 'success';
-      locationModel.lat = lat;
-      locationModel.lng = lng;
-      locationModel.accuracy = acc;
-      locationModel.errorMessage = '';
-      placeUserMarker(lat, lng, "red");
-      updateLocationUI();
-      if (!silent) {
-        setStatus(`✅ 已取得 GPS 位置（精度 ±${Math.round(acc)} m）`, 'success');
-      }
-      return true;
-    } catch (err) {
-      locationModel.phase = 'error';
-      locationModel.errorMessage = normalizeGeoError(err);
-      locationModel.lat = null;
-      locationModel.lng = null;
-      locationModel.accuracy = null;
-      clearUserMarker();
-      updateLocationUI();
-      clearStatus();
-      setDiagHelpVisible(true);
-      return false;
-    }
+    mapHint.textContent = "移動地圖或點選位置後即可搜尋";
+    mapHint.style.display = appState.hasMapChanged ? "none" : "";
   }
 
-  async function doSearch(lat, lng) {
-    const radius   = parseInt(radiusSelect.value, 10);
-    const minScore = parseFloat(minScoreInput.value);
+  function updateSearchAreaButton() {
+    const shouldShow = appState.hasMapChanged;
+    searchAreaBtn.hidden = !shouldShow;
 
-    setStatus('🔍 搜尋中，請稍候…', 'info');
-    setDiagHelpVisible(false);
-    searchBtn.disabled = true;
-    clearRestaurantLayers();
-    placeUserMarker(lat, lng);
-    drawRadius(lat, lng, radius);
-    setMapState('地圖：已顯示目前定位點與搜尋範圍', 'success');
+    if (!shouldShow) {
+      searchAreaBtn.disabled = false;
+      searchAreaBtn.textContent = "在此區域搜尋";
+      return;
+    }
+
+    searchAreaBtn.disabled = appState.isSearching;
+    searchAreaBtn.textContent = appState.isSearching ? "搜尋中..." : "在此區域搜尋";
+  }
+
+  function updateSheetExpandedState() {
+    bottomSheet.classList.toggle("is-expanded", appState.sheetExpanded);
+    sheetHeader.setAttribute("aria-expanded", appState.sheetExpanded ? "true" : "false");
+  }
+
+  function updateUI() {
+    updateSheetExpandedState();
+    updateSheetSummary();
+    updateMapHint();
+    updateSearchAreaButton();
+    renderMarker();
+  }
+
+  function setStatusBar(message, type) {
+    statusBar.textContent = message;
+    statusBar.className = `status-bar ${type}`;
+  }
+
+  function esc(str) {
+    if (!str) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function renderRestaurants(restaurants) {
+    restaurantList.innerHTML = "";
+    resultCount.textContent = `（${restaurants.length} 間）`;
+
+    if (restaurants.length === 0) {
+      restaurantList.innerHTML = '<p class="rst-card">此範圍內找不到符合條件的餐廳。</p>';
+      return;
+    }
+
+    restaurants.forEach((r) => {
+      const card = document.createElement("article");
+      card.className = "rst-card";
+
+      const scoreClass = r.score >= 4.0 ? "score-gold" : r.score >= 3.5 ? "score-green" : "score-default";
+      const scoreText = r.score != null ? Number(r.score).toFixed(2) : "—";
+
+      card.innerHTML = `
+        <a class="rst-name" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a>
+        <div class="rst-meta">
+          <span class="score-badge ${scoreClass}">★ ${scoreText}</span>
+          ${r.genre ? `<span>${esc(r.genre)}</span>` : ""}
+        </div>
+        ${r.address ? `<p class="rst-address">${esc(r.address)}</p>` : ""}
+      `;
+
+      restaurantList.appendChild(card);
+    });
+  }
+
+  async function doSearch() {
+    if (appState.isSearching || !appState.hasMapChanged) return;
+
+    const center = appState.location || map.getCenter();
+    appState.location = { lat: center.lat, lng: center.lng };
+    appState.isSearching = true;
+    appState.hasGpsError = false;
+    updateUI();
+
+    resultsSection.style.display = "";
+    setStatusBar("🔍 搜尋中，請稍候...", "info");
+
+    const radius = appState.radius;
+    const minScore = appState.minScore;
 
     try {
       const res = await fetch(
-        `/api/restaurants?lat=${lat}&lng=${lng}&radius=${radius}&min_score=${minScore}`
+        `/api/restaurants?lat=${center.lat}&lng=${center.lng}&radius=${radius}&min_score=${minScore}`
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      renderRestaurants(data.restaurants, lat, lng);
-      setStatus(
-        data.count > 0
-          ? `✅ 找到 ${data.count} 間評分 ≥ ${minScore} 的餐廳`
-          : `⚠️ 範圍內找不到評分 ≥ ${minScore} 的餐廳`,
-        data.count > 0 ? 'success' : 'warn'
-      );
-    } catch (e) {
-      setStatus(`❌ 搜尋失敗：${e.message}`, 'error');
+      renderRestaurants(data.restaurants || []);
+      if ((data.count || 0) > 0) {
+        setStatusBar(`✅ 找到 ${data.count} 間評分 ≥ ${minScore} 的餐廳`, "success");
+      } else {
+        setStatusBar(`⚠️ 範圍內找不到評分 ≥ ${minScore} 的餐廳`, "warn");
+      }
+      resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      appState.hasMapChanged = false;
+    } catch (err) {
+      setStatusBar(`❌ 搜尋失敗：${err.message}`, "error");
+      restaurantList.innerHTML = "";
+      resultCount.textContent = "";
     } finally {
-      updateSearchButtonState();
+      appState.isSearching = false;
+      updateUI();
     }
   }
 
-  // ── Search button ─────────────────────────────────────────────────────────
-  searchBtn.addEventListener('click', async () => {
-    const source = document.querySelector('input[name="loc-source"]:checked').value;
-
-    if (source === 'manual') {
-      const lat = parseFloat(inputLat.value);
-      const lng = parseFloat(inputLng.value);
-      if (isNaN(lat) || isNaN(lng)) {
-        setStatus('❌ 請輸入有效的緯度和經度', 'error');
-        return;
-      }
-      locationModel.source = 'manual';
-      locationModel.phase = 'manual';
-      updateLocationUI();
-      doSearch(lat, lng);
-    } else {
-      locationModel.source = 'gps';
-      if (locationModel.phase !== 'success') {
-        const ok = await startGpsLocationFlow({ silent: false });
-        if (!ok) {
-          return;
-        }
-      }
-      if (locationModel.lat == null || locationModel.lng == null) {
-        clearStatus();
-        return;
-      }
-      doSearch(locationModel.lat, locationModel.lng);
+  async function triggerGpsLocation() {
+    if (!navigator.geolocation) {
+      appState.hasGpsError = true;
+      updateUI();
+      return;
     }
-  });
 
-  diagBtn.addEventListener('click', () => {
-    runLocationDiagnostics();
-  });
-
-  retryLocBtn.addEventListener('click', () => {
-    locationModel.source = 'gps';
-    document.querySelector('input[name="loc-source"][value="gps"]').checked = true;
-    manualCoords.style.display = 'none';
-    startGpsLocationFlow({ silent: false });
-  });
-
-  switchManualBtn.addEventListener('click', () => {
-    locationModel.source = 'manual';
-    locationModel.phase = 'manual';
-    document.querySelector('input[name="loc-source"][value="manual"]').checked = true;
-    manualCoords.style.display = '';
-    if (locationModel.lat != null && locationModel.lng != null) {
-      inputLat.value = locationModel.lat.toFixed(6);
-      inputLng.value = locationModel.lng.toFixed(6);
+    try {
+      const pos = await getCurrentPositionAsync(GPS_OPTIONS);
+      map.setView([pos.coords.latitude, pos.coords.longitude], 16);
+      appState.location = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      appState.hasMapChanged = true;
+      appState.hasGpsError = false;
+    } catch {
+      appState.hasGpsError = true;
     }
-    updateLocationUI();
-    setStatus('ℹ️ 已切換到手動座標模式', 'info');
+
+    updateUI();
+  }
+
+  sheetHeader.addEventListener("click", () => {
+    appState.sheetExpanded = !appState.sheetExpanded;
+    updateUI();
   });
 
-  inputLat.addEventListener('input', updateSearchButtonState);
-  inputLng.addEventListener('input', updateSearchButtonState);
-
-  // ── Click map to set manual location ─────────────────────────────────────
-  map.on('click', e => {
-    document.querySelector('input[name="loc-source"][value="manual"]').checked = true;
-    locationModel.source = 'manual';
-    locationModel.phase = 'manual';
-    manualCoords.style.display = '';
-    inputLat.value = e.latlng.lat.toFixed(6);
-    inputLng.value = e.latlng.lng.toFixed(6);
-    placeUserMarker(e.latlng.lat, e.latlng.lng, "green", { centerMap: false });
-    updateLocationUI();
-    setStatus(`📍 已選取位置：${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`, 'info');
+  openSheetBtn.addEventListener("click", () => {
+    appState.sheetExpanded = true;
+    updateUI();
   });
 
-  setDiagHelpVisible(false);
-  updateLocationUI();
-  startGpsLocationFlow({ silent: true });
+  gpsFabBtn.addEventListener("click", triggerGpsLocation);
 
-  map.on("moveend", () => {
-    saveMapView(map);
+  radiusSelect.addEventListener("change", () => {
+    appState.radius = parseInt(radiusSelect.value, 10);
+    updateUI();
   });
 
-  map.whenReady(() => {
-    setTimeout(() => map.invalidateSize(), 0);
+  minScoreSelect.addEventListener("change", () => {
+    appState.minScore = parseFloat(minScoreSelect.value);
+    updateUI();
   });
 
-  window.addEventListener("resize", () => {
-    map.invalidateSize();
-  });
+  searchAreaBtn.addEventListener("click", doSearch);
 
-  window.addEventListener("orientationchange", () => {
-    setTimeout(() => map.invalidateSize(), 120);
-  });
+  updateUI();
 })();
