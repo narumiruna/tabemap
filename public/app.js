@@ -1,8 +1,48 @@
 (() => {
   'use strict';
 
+  // ── Persisted map view ────────────────────────────────────────────────────
+  const MAP_VIEW_STORAGE_KEY = "tabemap:last-map-view";
+  const DEFAULT_MAP_VIEW = Object.freeze({
+    lat: 34.4902,
+    lng: 136.7091,
+    zoom: 14
+  });
+
+  function loadLastMapView() {
+    try {
+      const raw = localStorage.getItem(MAP_VIEW_STORAGE_KEY);
+      if (!raw) return DEFAULT_MAP_VIEW;
+      const parsed = JSON.parse(raw);
+      if (
+        typeof parsed?.lat !== "number" ||
+        typeof parsed?.lng !== "number" ||
+        typeof parsed?.zoom !== "number"
+      ) {
+        return DEFAULT_MAP_VIEW;
+      }
+      return parsed;
+    } catch {
+      return DEFAULT_MAP_VIEW;
+    }
+  }
+
+  function saveMapView(mapInstance) {
+    try {
+      const center = mapInstance.getCenter();
+      const zoom = mapInstance.getZoom();
+      localStorage.setItem(
+        MAP_VIEW_STORAGE_KEY,
+        JSON.stringify({ lat: center.lat, lng: center.lng, zoom })
+      );
+    } catch {
+      // Ignore storage failures (private mode/quota/security policy).
+    }
+  }
+
   // ── Map init ──────────────────────────────────────────────────────────────
-  const map = L.map('map').setView([35.6812, 139.7671], 14);
+  const initialMapView = loadLastMapView();
+  const map = L.map('map').setView([initialMapView.lat, initialMapView.lng], initialMapView.zoom);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -361,5 +401,9 @@
     inputLat.value = e.latlng.lat.toFixed(6);
     inputLng.value = e.latlng.lng.toFixed(6);
     setStatus(`📍 已選取位置：${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`, 'info');
+  });
+
+  map.on("moveend", () => {
+    saveMapView(map);
   });
 })();
