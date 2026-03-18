@@ -14,7 +14,9 @@
     radius: 1000,
     minScore: 3.5,
     hasGpsError: false,
-    isGpsLoading: false
+    isGpsLoading: false,
+    results: [],
+    resultsSheet: "hidden"
   };
 
   const mapHint = document.getElementById("map-hint");
@@ -34,8 +36,12 @@
   const minScoreSelect = document.getElementById("min-score");
 
   const resultsSection = document.getElementById("results-section");
-  const resultCount = document.getElementById("result-count");
-  const statusBar = document.getElementById("status-bar");
+  const resultsHeader = document.getElementById("results-header");
+  const resultsTitle = document.getElementById("results-title");
+  const resultsSubtitle = document.getElementById("results-subtitle");
+  const resultsDragHandle = document.getElementById("results-drag-handle");
+  const resultsCloseBtn = document.getElementById("results-close-btn");
+  const resultsReopenBtn = document.getElementById("results-reopen-btn");
   const restaurantList = document.getElementById("restaurant-list");
 
   let userMarker = null;
@@ -76,19 +82,13 @@
     mapInstance.on("moveend", () => {
       saveMapView(mapInstance);
       if (bootstrapping) return;
-      const center = mapInstance.getCenter();
-      setLocation({ lat: center.lat, lng: center.lng });
       appState.hasMapChanged = true;
-      clearSearchLayers();
       updateUI();
     });
 
     mapInstance.on("zoomend", () => {
       if (bootstrapping) return;
-      const center = mapInstance.getCenter();
-      setLocation({ lat: center.lat, lng: center.lng });
       appState.hasMapChanged = true;
-      clearSearchLayers();
       updateUI();
     });
 
@@ -315,6 +315,21 @@
     panelHeader.setAttribute("aria-expanded", appState.sheetExpanded ? "true" : "false");
   }
 
+  function setResultsSheetState(nextState) {
+    appState.resultsSheet = nextState;
+    resultsSection.classList.remove("is-hidden", "is-peek", "is-expanded");
+    resultsSection.classList.add(`is-${nextState}`);
+
+    const hasResults = appState.results.length > 0;
+    resultsReopenBtn.hidden = !(nextState === "hidden" && hasResults);
+    resultsReopenBtn.textContent = `搜尋結果（${appState.results.length}）`;
+  }
+
+  function updateResultsSheetUI() {
+    resultsTitle.textContent = `搜尋結果（${appState.results.length} 間）`;
+    setResultsSheetState(appState.resultsSheet);
+  }
+
   function updateUI() {
     syncLocationSourceRadios();
     updatePanelState();
@@ -323,12 +338,13 @@
     updateMapHint();
     updateSearchAreaButton();
     renderMarker();
+    updateResultsSheetUI();
     useGpsBtn.disabled = appState.isGpsLoading;
   }
 
-  function setStatusBar(message, type) {
-    statusBar.textContent = message;
-    statusBar.className = `status-bar ${type}`;
+  function setResultsSubtitle(message, type) {
+    resultsSubtitle.textContent = message;
+    resultsSubtitle.className = `results-subtitle ${type}`;
   }
 
   function esc(str) {
@@ -343,7 +359,8 @@
 
   function renderRestaurants(restaurants) {
     restaurantList.innerHTML = "";
-    resultCount.textContent = `（${restaurants.length} 間）`;
+    appState.results = restaurants;
+    resultsTitle.textContent = `搜尋結果（${restaurants.length} 間）`;
 
     if (restaurants.length === 0) {
       restaurantList.innerHTML = '<p class="rst-card">此範圍內找不到符合條件的餐廳。</p>';
@@ -382,14 +399,12 @@
     if (appState.isSearching || !appState.hasMapChanged) return;
 
     const center = appState.location || map.getCenter();
-    setLocation({ lat: center.lat, lng: center.lng });
     appState.isSearching = true;
     appState.hasGpsError = false;
+    appState.resultsSheet = "peek";
     updateUI();
     clearSearchLayers();
-
-    resultsSection.style.display = "";
-    setStatusBar("🔍 搜尋中，請稍候...", "info");
+    setResultsSubtitle("搜尋中，請稍候...", "info");
 
     const radius = appState.radius;
     const minScore = appState.minScore;
@@ -409,16 +424,18 @@
       renderSearchOverlays(restaurants, center, radius);
 
       if ((data.count || 0) > 0) {
-        setStatusBar(`✅ 找到 ${data.count} 間評分 ≥ ${minScore} 的餐廳`, "success");
+        setResultsSubtitle(`找到 ${data.count} 間評分 ≥ ${minScore} 的餐廳`, "success");
       } else {
-        setStatusBar(`⚠️ 範圍內找不到評分 ≥ ${minScore} 的餐廳`, "warn");
+        setResultsSubtitle(`範圍內找不到評分 ≥ ${minScore} 的餐廳`, "warn");
       }
 
       appState.hasMapChanged = false;
+      appState.resultsSheet = "peek";
     } catch (err) {
-      setStatusBar(`❌ 搜尋失敗：${err.message}`, "error");
+      appState.results = [];
+      appState.resultsSheet = "hidden";
+      setResultsSubtitle(`搜尋失敗：${err.message}`, "error");
       restaurantList.innerHTML = "";
-      resultCount.textContent = "";
       clearSearchLayers();
     } finally {
       appState.isSearching = false;
@@ -451,6 +468,78 @@
       appState.isGpsLoading = false;
       updateUI();
     }
+  }
+
+  function initResultsSheetInteractions() {
+    let startY = 0;
+    let isDragging = false;
+
+    const onPointerMove = (event) => {
+      if (!isDragging) return;
+      const deltaY = event.clientY - startY;
+      if (deltaY > 0) {
+        resultsSection.style.transform = `translateY(${Math.min(deltaY, 120)}px)`;
+      }
+    };
+
+    const onPointerUp = (event) => {
+      if (!isDragging) return;
+      const deltaY = event.clientY - startY;
+      isDragging = false;
+      resultsSection.style.transform = "";
+      resultsSection.releasePointerCapture?.(event.pointerId);
+
+      if (deltaY > 60) {
+        if (appState.resultsSheet === "expanded") {
+          appState.resultsSheet = "peek";
+        } else if (appState.resultsSheet === "peek") {
+          appState.resultsSheet = "hidden";
+        }
+      } else if (deltaY < -40 && appState.resultsSheet === "peek") {
+        appState.resultsSheet = "expanded";
+      }
+      updateUI();
+    };
+
+    resultsHeader.addEventListener("pointerdown", (event) => {
+      if (event.target === resultsCloseBtn) return;
+      isDragging = true;
+      startY = event.clientY;
+      resultsSection.setPointerCapture?.(event.pointerId);
+    });
+
+    resultsHeader.addEventListener("pointermove", onPointerMove);
+    resultsHeader.addEventListener("pointerup", onPointerUp);
+    resultsHeader.addEventListener("pointercancel", onPointerUp);
+
+    resultsDragHandle.addEventListener("click", () => {
+      if (appState.resultsSheet === "hidden") {
+        appState.resultsSheet = "peek";
+      } else if (appState.resultsSheet === "peek") {
+        appState.resultsSheet = "expanded";
+      } else {
+        appState.resultsSheet = "peek";
+      }
+      updateUI();
+    });
+
+    resultsHeader.addEventListener("click", (event) => {
+      if (event.target === resultsCloseBtn || event.target === resultsDragHandle) return;
+      if (appState.resultsSheet === "peek") {
+        appState.resultsSheet = "expanded";
+        updateUI();
+      }
+    });
+
+    resultsCloseBtn.addEventListener("click", () => {
+      appState.resultsSheet = "hidden";
+      updateUI();
+    });
+
+    resultsReopenBtn.addEventListener("click", () => {
+      appState.resultsSheet = "peek";
+      updateUI();
+    });
   }
 
   panelHeader.addEventListener("click", () => {

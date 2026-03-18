@@ -16,6 +16,20 @@
       <button id="search-area-btn" class="search-area-btn" type="button" hidden>在此區域搜尋</button>
       <button id="open-sheet-btn" class="floating-chip" type="button">篩選與設定</button>
       <button id="gps-fab-btn" class="fab" type="button" aria-label="使用目前位置">◎</button>
+
+      <section id="results-section" class="results-section is-hidden" aria-label="搜尋結果">
+        <header id="results-header" class="results-header">
+          <button id="results-drag-handle" class="results-drag-handle" type="button" aria-label="展開或收合搜尋結果"></button>
+          <div class="results-headline">
+            <h2 id="results-title">搜尋結果（0 間）</h2>
+            <p id="results-subtitle" class="results-subtitle"></p>
+          </div>
+          <button id="results-close-btn" class="results-close-btn" type="button" aria-label="關閉搜尋結果">×</button>
+        </header>
+        <div id="restaurant-list" class="restaurant-list"></div>
+      </section>
+
+      <button id="results-reopen-btn" class="results-reopen-btn" type="button" hidden>搜尋結果（0）</button>
     </section>
 
     <aside id="control-panel" class="control-panel" aria-label="篩選與設定">
@@ -64,12 +78,6 @@
       </div>
     </aside>
   </main>
-
-  <section id="results-section" class="results-section" style="display:none">
-    <h2>搜尋結果 <span id="result-count" class="result-count"></span></h2>
-    <div id="status-bar" class="status-bar" aria-live="polite"></div>
-    <div id="restaurant-list" class="restaurant-list"></div>
-  </section>
 
   <script src="/leaflet/leaflet.js"></script>
   <script src="app.js"></script>
