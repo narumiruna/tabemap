@@ -13,9 +13,17 @@
       <div id="map"></div>
 
       <div id="map-hint" class="map-hint" aria-live="polite">移動地圖或點選位置後即可搜尋</div>
-      <button id="search-area-btn" class="search-area-btn" type="button" hidden>在此區域搜尋</button>
-      <button id="open-sheet-btn" class="floating-chip" type="button">篩選與設定</button>
-      <button id="gps-fab-btn" class="fab" type="button" aria-label="使用目前位置">◎</button>
+      <button id="search-area-btn" class="search-area-btn" type="button" hidden>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <span id="search-area-label">在此區域搜尋</span>
+      </button>
+      <button id="open-sheet-btn" class="floating-chip" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="20" y1="6" y2="6"/><line x1="8" x2="16" y1="12" y2="12"/><line x1="11" x2="13" y1="18" y2="18"/></svg>
+        篩選與設定
+      </button>
+      <button id="gps-fab-btn" class="fab" type="button" aria-label="使用目前位置">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><line x1="12" x2="12" y1="1" y2="5"/><line x1="12" x2="12" y1="19" y2="23"/><line x1="1" x2="5" y1="12" y2="12"/><line x1="19" x2="23" y1="12" y2="12"/></svg>
+      </button>
 
       <section id="results-section" class="results-section is-hidden" aria-label="搜尋結果">
         <header id="results-header" class="results-header">
@@ -33,6 +41,14 @@
     </section>
 
     <aside id="control-panel" class="control-panel" aria-label="篩選與設定">
+      <div class="app-header" aria-hidden="true">
+        <div class="app-header-icon">★</div>
+        <div class="app-header-text">
+          <span class="app-header-name">Tabelog Map</span>
+          <span class="app-header-sub">附近高評分餐廳</span>
+        </div>
+      </div>
+
       <button id="panel-header" class="panel-header" type="button" aria-expanded="false">
         <span class="panel-handle" aria-hidden="true"></span>
         <span id="panel-header-summary" class="panel-header-summary">尚未選擇位置 ・ 1 km ・ 3.5+</span>
@@ -41,8 +57,10 @@
       <div id="panel-content" class="panel-content">
         <section class="panel-block" aria-label="摘要">
           <h2>摘要</h2>
-          <p id="location-summary" class="summary-line">尚未選擇位置</p>
-          <p id="filter-summary" class="summary-line">1 km ・ 3.5+</p>
+          <div class="summary-card">
+            <p id="location-summary" class="summary-line">尚未選擇位置</p>
+            <p id="filter-summary" class="summary-line">1 km ・ 3.5+</p>
+          </div>
         </section>
 
         <section class="panel-block" aria-label="位置設定">
@@ -51,29 +69,36 @@
             <label><input type="radio" name="loc-source" value="map" checked /> 使用地圖選點（預設）</label>
             <label><input type="radio" name="loc-source" value="gps" /> 使用 GPS</label>
           </div>
-          <button id="use-gps-btn" class="btn-secondary" type="button">使用目前位置</button>
+          <button id="use-gps-btn" class="btn-secondary" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><line x1="12" x2="12" y1="1" y2="5"/><line x1="12" x2="12" y1="19" y2="23"/><line x1="1" x2="5" y1="12" y2="12"/><line x1="19" x2="23" y1="12" y2="12"/></svg>
+            使用目前位置
+          </button>
           <p id="loc-inline-state" class="inline-state" aria-live="polite">點擊地圖選擇位置</p>
         </section>
 
         <section class="panel-block" aria-label="篩選條件">
           <h2>篩選</h2>
           <label class="field-label" for="radius-select">搜尋半徑</label>
-          <select id="radius-select">
-            <option value="300">300 m</option>
-            <option value="500">500 m</option>
-            <option value="1000" selected>1 km</option>
-            <option value="3000">3 km</option>
-            <option value="5000">5 km</option>
-          </select>
+          <div class="select-wrap">
+            <select id="radius-select">
+              <option value="300">300 m</option>
+              <option value="500">500 m</option>
+              <option value="1000" selected>1 km</option>
+              <option value="3000">3 km</option>
+              <option value="5000">5 km</option>
+            </select>
+          </div>
 
           <label class="field-label" for="min-score">最低評分</label>
-          <select id="min-score">
-            <option value="3.0">3.0+</option>
-            <option value="3.3">3.3+</option>
-            <option value="3.5" selected>3.5+</option>
-            <option value="3.8">3.8+</option>
-            <option value="4.0">4.0+</option>
-          </select>
+          <div class="select-wrap">
+            <select id="min-score">
+              <option value="3.0">3.0+</option>
+              <option value="3.3">3.3+</option>
+              <option value="3.5" selected>3.5+</option>
+              <option value="3.8">3.8+</option>
+              <option value="4.0">4.0+</option>
+            </select>
+          </div>
         </section>
       </div>
     </aside>
