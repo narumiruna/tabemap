@@ -20,54 +20,74 @@
 
   <!-- ── Search panel ── -->
   <section class="search-panel">
-    <div class="search-row">
+    <div class="controls-grid">
+      <section class="control-card">
+        <h2 class="control-title">定位設定</h2>
 
-      <!-- Location source -->
-      <div class="field-group">
-        <label class="field-label">📍 位置來源</label>
-        <div class="radio-group">
-          <label><input type="radio" name="loc-source" value="gps" checked /> GPS 優先（高精度）</label>
-          <label><input type="radio" name="loc-source" value="manual" /> 手動輸入</label>
+        <div class="field-group">
+          <label class="field-label">位置來源</label>
+          <div class="radio-group">
+            <label><input type="radio" name="loc-source" value="gps" checked /> 自動定位（GPS）</label>
+            <label><input type="radio" name="loc-source" value="manual" /> 手動座標</label>
+          </div>
+          <p id="loc-state" class="loc-state is-pending">定位狀態：尚未定位</p>
+          <div id="loc-actions" class="loc-actions" hidden>
+            <button id="retry-loc-btn" class="btn-loc-primary" type="button">重新定位</button>
+            <button id="switch-manual-btn" class="btn-secondary" type="button">改用手動輸入</button>
+          </div>
         </div>
-      </div>
 
-      <!-- Manual coordinates (hidden by default) -->
-      <div class="field-group" id="manual-coords" style="display:none">
-        <label class="field-label">緯度 / 經度</label>
-        <div class="coords-row">
-          <input type="number" id="input-lat" placeholder="緯度 (e.g. 35.6812)" step="any" />
-          <input type="number" id="input-lng" placeholder="經度 (e.g. 139.7671)" step="any" />
+        <div class="field-group" id="manual-coords" style="display:none">
+          <label class="field-label">緯度 / 經度</label>
+          <div class="coords-row">
+            <input type="number" id="input-lat" placeholder="緯度 (e.g. 35.6812)" step="any" />
+            <input type="number" id="input-lng" placeholder="經度 (e.g. 139.7671)" step="any" />
+          </div>
         </div>
-      </div>
 
-      <!-- Radius -->
-      <div class="field-group">
-        <label class="field-label" for="radius-select">🔍 搜尋半徑</label>
-        <select id="radius-select">
-          <option value="300">300 m</option>
-          <option value="500">500 m</option>
-          <option value="1000" selected>1 km</option>
-          <option value="3000">3 km</option>
-          <option value="5000">5 km</option>
-        </select>
-      </div>
+        <button id="diag-btn" class="btn-diag-link" type="button" hidden>定位有問題？執行診斷</button>
+      </section>
 
-      <!-- Min score -->
-      <div class="field-group">
-        <label class="field-label" for="min-score">⭐ 最低評分</label>
-        <input type="number" id="min-score" value="3.5" min="0" max="5" step="0.1" />
-      </div>
+      <section class="control-card">
+        <h2 class="control-title">搜尋條件</h2>
 
-      <button id="search-btn" class="btn-search">搜尋</button>
-      <button id="diag-btn" class="btn-diag" type="button">定位診斷</button>
+        <div class="search-row">
+          <div class="field-group">
+            <label class="field-label" for="radius-select">搜尋半徑</label>
+            <select id="radius-select">
+              <option value="300">300 m</option>
+              <option value="500">500 m</option>
+              <option value="1000" selected>1 km（預設）</option>
+              <option value="3000">3 km</option>
+              <option value="5000">5 km</option>
+            </select>
+            <p class="field-help">範圍越大，結果通常越多。</p>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="min-score">最低評分</label>
+            <select id="min-score">
+              <option value="3.0">3.0（寬鬆）</option>
+              <option value="3.3">3.3</option>
+              <option value="3.5" selected>3.5（預設）</option>
+              <option value="3.8">3.8</option>
+              <option value="4.0">4.0（嚴格）</option>
+            </select>
+            <p class="field-help">門檻越高，結果通常越少。</p>
+          </div>
+        </div>
+
+        <p id="search-hint" class="search-hint" aria-live="polite"></p>
+        <button id="search-btn" class="btn-search">開始搜尋</button>
+      </section>
     </div>
 
     <div id="status-bar" class="status-bar" aria-live="polite"></div>
-    <div id="gps-info" class="gps-info" aria-live="polite">GPS：尚未取得定位</div>
     <pre id="diag-output" class="diag-output" style="display:none"></pre>
   </section>
 
   <!-- ── Map ── -->
+  <div id="map-state" class="map-state" aria-live="polite">地圖：等待定位後顯示目前定位點，可點擊地圖手動選位置</div>
   <div id="map"></div>
 
   <!-- ── Results ── -->

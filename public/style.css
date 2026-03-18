@@ -28,14 +28,93 @@ body {
   border-bottom: 1px solid #e2e8f0;
   padding: .9rem 1.5rem;
 }
+.controls-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .9rem;
+}
+.control-card {
+  border: 1px solid #e2e8f0;
+  border-radius: .7rem;
+  background: #f8fafc;
+  padding: .75rem .85rem;
+}
+.control-title {
+  font-size: .9rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: .55rem;
+}
 .search-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: .75rem;
   align-items: flex-end;
 }
-.field-group { display: flex; flex-direction: column; gap: .3rem; min-width: 140px; }
+.field-group { display: flex; flex-direction: column; gap: .25rem; min-width: 140px; }
+.search-row .field-group { gap: .2rem; }
 .field-label { font-size: .75rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+.field-help { font-size: .75rem; color: #64748b; }
+.loc-state {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .78rem;
+  font-weight: 600;
+  border-radius: .35rem;
+  padding: .3rem .45rem;
+}
+.loc-state.is-pending { background: #f1f5f9; color: #334155; }
+.loc-state.is-loading { background: #eff6ff; color: #1d4ed8; }
+.loc-state.is-success { background: #f0fdf4; color: #15803d; }
+.loc-state.is-error { background: #fffbeb; color: #b45309; }
+.loc-state.is-manual { background: #fff7ed; color: #c2410c; }
+.loc-state.is-loading::before {
+  content: "";
+  width: .72rem;
+  height: .72rem;
+  border: 2px solid rgba(29, 78, 216, .25);
+  border-top-color: #1d4ed8;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+.loc-actions {
+  margin-top: .1rem;
+  display: flex;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+
+.btn-loc-primary {
+  background: #1d4ed8;
+  border: 1px solid #1d4ed8;
+  color: #fff;
+  border-radius: .4rem;
+  padding: .35rem .65rem;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-loc-primary:hover {
+  background: #1e40af;
+  border-color: #1e40af;
+}
+
+.btn-secondary {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  border-radius: .4rem;
+  padding: .35rem .55rem;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
 
 .radio-group { display: flex; gap: .75rem; }
 .radio-group label { font-size: .9rem; cursor: pointer; display: flex; align-items: center; gap: .3rem; }
@@ -61,28 +140,36 @@ select:focus { border-color: #3b82f6; background: #fff; }
   color: #fff;
   border: none;
   border-radius: .4rem;
-  padding: .55rem 1.4rem;
+  padding: .65rem 1.4rem;
   font-size: .95rem;
   font-weight: 600;
   cursor: pointer;
   transition: background .15s;
   white-space: nowrap;
+  min-height: 44px;
 }
 .btn-search:hover:not(:disabled) { background: #b91c1c; }
 .btn-search:disabled { opacity: .5; cursor: not-allowed; }
-.btn-diag {
-  background: #334155;
-  color: #fff;
-  border: none;
-  border-radius: .4rem;
-  padding: .55rem 1rem;
-  font-size: .9rem;
+.btn-diag-link {
+  background: transparent;
+  color: #1d4ed8;
+  border: 0;
+  padding: .2rem 0 0;
+  font-size: .82rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background .15s;
-  white-space: nowrap;
+  text-align: left;
+  text-decoration: underline;
 }
-.btn-diag:hover { background: #1e293b; }
+.btn-diag-link:hover { color: #1e40af; }
+
+.search-hint {
+  min-height: 1.1rem;
+  margin-top: .05rem;
+  margin-bottom: .25rem;
+  font-size: .78rem;
+  color: #b45309;
+}
 
 /* ── Status bar ──────────────────────────────────────────────────────────── */
 .status-bar {
@@ -95,12 +182,7 @@ select:focus { border-color: #3b82f6; background: #fff; }
 .status-bar.info    { background: #eff6ff; color: #1d4ed8; }
 .status-bar.success { background: #f0fdf4; color: #15803d; }
 .status-bar.warn    { background: #fefce8; color: #a16207; }
-.status-bar.error   { background: #fef2f2; color: #b91c1c; }
-.gps-info {
-  margin-top: .4rem;
-  font-size: .8rem;
-  color: #475569;
-}
+.status-bar.error   { background: #fff7ed; color: #c2410c; }
 .diag-output {
   margin-top: .5rem;
   border: 1px solid #cbd5e1;
@@ -113,6 +195,14 @@ select:focus { border-color: #3b82f6; background: #fff; }
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.map-state {
+  margin: .55rem 1.5rem .35rem;
+  font-size: .82rem;
+  color: #475569;
+}
+.map-state.is-success { color: #15803d; }
+.map-state.is-manual { color: #c2410c; }
 
 /* ── Map ─────────────────────────────────────────────────────────────────── */
 #map {
@@ -263,6 +353,10 @@ select:focus { border-color: #3b82f6; background: #fff; }
     padding-right: 1rem;
   }
 
+  .controls-grid {
+    grid-template-columns: 1fr;
+  }
+
   .field-group {
     min-width: 0;
     flex: 1 1 180px;
@@ -293,11 +387,12 @@ select:focus { border-color: #3b82f6; background: #fff; }
   .search-row {
     flex-direction: column;
     align-items: stretch;
-    gap: .75rem;
+    gap: .45rem;
   }
 
   .field-group {
     width: 100%;
+    gap: .2rem;
   }
 
   .field-label {
@@ -323,11 +418,15 @@ select:focus { border-color: #3b82f6; background: #fff; }
     width: 100%;
   }
 
-  .btn-search,
-  .btn-diag {
+  .btn-search {
     width: 100%;
     min-height: 44px;
     font-size: 1rem;
+  }
+
+  .btn-diag-link {
+    width: auto;
+    font-size: .8rem;
   }
 
   input[type="number"],
@@ -337,14 +436,22 @@ select:focus { border-color: #3b82f6; background: #fff; }
     padding: .55rem .7rem;
   }
 
+  /* Keep touch targets, but tighten the two numeric controls visually. */
+  #radius-select,
+  #min-score {
+    min-height: 40px;
+    padding-top: .4rem;
+    padding-bottom: .4rem;
+  }
+
   .status-bar {
     font-size: .82rem;
     line-height: 1.45;
   }
 
-  .gps-info {
-    font-size: .78rem;
-    line-height: 1.4;
+  .map-state {
+    margin-left: .85rem;
+    margin-right: .85rem;
   }
 
   #map {
@@ -384,6 +491,10 @@ select:focus { border-color: #3b82f6; background: #fff; }
   .rst-address {
     font-size: .75rem;
   }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 380px) {

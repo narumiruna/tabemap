@@ -54,7 +54,12 @@
 
   // ── DOM refs ──────────────────────────────────────────────────────────────
   const statusBar      = document.getElementById('status-bar');
-  const gpsInfo        = document.getElementById('gps-info');
+  const locState       = document.getElementById('loc-state');
+  const mapState       = document.getElementById('map-state');
+  const locActions     = document.getElementById('loc-actions');
+  const retryLocBtn    = document.getElementById('retry-loc-btn');
+  const switchManualBtn = document.getElementById('switch-manual-btn');
+  const searchHint     = document.getElementById('search-hint');
   const searchBtn      = document.getElementById('search-btn');
   const diagBtn        = document.getElementById('diag-btn');
   const diagOutput     = document.getElementById('diag-output');
@@ -71,11 +76,34 @@
     timeout: 12000,
     maximumAge: 0
   });
+  const SEARCH_DEFAULT_LABEL = '開始搜尋';
+
+  const locationModel = {
+    source: 'gps',
+    phase: 'idle', // idle | loading | success | error | manual
+    lat: null,
+    lng: null,
+    accuracy: null,
+    errorMessage: ''
+  };
 
   // ── Location source toggle ────────────────────────────────────────────────
   document.querySelectorAll('input[name="loc-source"]').forEach(radio => {
     radio.addEventListener('change', () => {
       manualCoords.style.display = radio.value === 'manual' ? '' : 'none';
+      if (!radio.checked) return;
+      if (radio.value === 'manual') {
+        locationModel.source = 'manual';
+        locationModel.phase = 'manual';
+        updateLocationUI();
+      } else {
+        locationModel.source = 'gps';
+        if (locationModel.phase !== 'success') {
+          locationModel.phase = 'idle';
+        }
+        updateLocationUI();
+        startGpsLocationFlow({ silent: false });
+      }
     });
   });
 
@@ -85,8 +113,97 @@
     statusBar.className = 'status-bar ' + type;
   }
 
-  function setGpsInfo(msg) {
-    gpsInfo.textContent = `GPS：${msg}`;
+  function setLocationState(msg, state = 'pending') {
+    locState.textContent = msg;
+    locState.className = `loc-state is-${state}`;
+  }
+
+  function setMapState(msg, state = 'pending') {
+    mapState.textContent = msg;
+    mapState.className = `map-state is-${state}`;
+  }
+
+  function clearStatus() {
+    statusBar.textContent = '';
+    statusBar.className = 'status-bar info';
+  }
+
+  function normalizeGeoError(err) {
+    const message = String(err?.message || '').toLowerCase();
+    if (err?.code === 1 || message.includes('denied') || message.includes('permission')) {
+      return '未允許定位權限';
+    }
+    if (err?.code === 3 || message.includes('timeout') || message.includes('逾時')) {
+      return '定位逾時';
+    }
+    if (err?.code === 2 || message.includes('unavailable')) {
+      return '目前無法取得定位';
+    }
+    return '目前無法定位，請重試';
+  }
+
+  function updateSearchButtonState() {
+    searchHint.textContent = '';
+    if (locationModel.source === 'manual') {
+      const lat = parseFloat(inputLat.value);
+      const lng = parseFloat(inputLng.value);
+      const invalidManualCoords = Number.isNaN(lat) || Number.isNaN(lng);
+      searchBtn.disabled = invalidManualCoords;
+      searchBtn.textContent = SEARCH_DEFAULT_LABEL;
+      if (invalidManualCoords) {
+        searchHint.textContent = '需先輸入有效座標，或點擊地圖選位置';
+      }
+      return;
+    }
+    searchBtn.disabled = locationModel.phase !== 'success';
+    if (locationModel.phase === 'loading') {
+      searchBtn.textContent = '定位中...';
+      searchHint.textContent = '需先取得位置才能開始搜尋';
+    } else if (locationModel.phase !== 'success') {
+      searchHint.textContent = '需先取得位置或改用手動輸入';
+    } else {
+      searchBtn.textContent = SEARCH_DEFAULT_LABEL;
+    }
+  }
+
+  function updateLocationUI() {
+    locActions.hidden = true;
+    if (locationModel.source === 'manual') {
+      setLocationState('定位狀態：手動模式（使用輸入座標或地圖選點）', 'manual');
+      setMapState('地圖：手動模式，可點地圖設定座標', 'manual');
+      updateSearchButtonState();
+      return;
+    }
+
+    if (locationModel.phase === 'loading') {
+      setLocationState('定位狀態：GPS 定位中...', 'loading');
+      setMapState('地圖：等待 GPS 定位完成', 'pending');
+      updateSearchButtonState();
+      return;
+    }
+
+    if (locationModel.phase === 'success') {
+      setLocationState(`定位狀態：已定位（±${Math.round(locationModel.accuracy ?? 0)} m）`, 'success');
+      setMapState('地圖：已顯示目前定位點', 'success');
+      updateSearchButtonState();
+      return;
+    }
+
+    if (locationModel.phase === 'error') {
+      setLocationState(`定位狀態：定位失敗（${locationModel.errorMessage || '請重試'}）`, 'error');
+      setMapState('地圖：可點擊地圖手動選位置，或改用手動輸入', 'pending');
+      locActions.hidden = false;
+      updateSearchButtonState();
+      return;
+    }
+
+    setLocationState('定位狀態：尚未定位', 'pending');
+    setMapState('地圖：等待定位後顯示目前定位點，可點擊地圖手動選位置', 'pending');
+    updateSearchButtonState();
+  }
+
+  function setDiagHelpVisible(visible) {
+    diagBtn.hidden = !visible;
   }
 
   function setDiagOutput(lines) {
@@ -120,6 +237,13 @@
     }).addTo(map).bindPopup('您的位置');
     if (centerMap) {
       map.setView([lat, lng], 15);
+    }
+  }
+
+  function clearUserMarker() {
+    if (userMarker) {
+      map.removeLayer(userMarker);
+      userMarker = null;
     }
   }
 
@@ -262,6 +386,12 @@
       lines.push('geolocation: unavailable');
       setDiagOutput(lines);
       setStatus('❌ 瀏覽器不支援定位', 'error');
+      setDiagHelpVisible(true);
+      if (locationModel.source === 'gps') {
+        locationModel.phase = 'error';
+        locationModel.errorMessage = '瀏覽器不支援定位';
+        updateLocationUI();
+      }
       return;
     }
 
@@ -296,11 +426,13 @@
       lines.push(`position.timestamp: ${new Date(pos.timestamp).toISOString()}`);
       setDiagOutput(lines);
       setStatus('✅ 定位診斷完成', 'success');
+      setDiagHelpVisible(false);
     } catch (err) {
       lines.push(`error.name: ${err?.name ?? 'Error'}`);
       lines.push(`error.message: ${err?.message ?? String(err)}`);
       setDiagOutput(lines);
       setStatus(`❌ 定位診斷失敗：${err.message}`, 'error');
+      setDiagHelpVisible(true);
     }
   }
 
@@ -322,15 +454,79 @@
     }
   }
 
+  async function startGpsLocationFlow({ silent = false } = {}) {
+    if (!navigator.geolocation) {
+      locationModel.phase = 'error';
+      locationModel.errorMessage = '瀏覽器不支援定位';
+      updateLocationUI();
+      setDiagHelpVisible(true);
+      if (!silent) clearStatus();
+      return false;
+    }
+
+    locationModel.phase = 'loading';
+    locationModel.errorMessage = '';
+    updateLocationUI();
+    setDiagHelpVisible(false);
+    if (!silent) {
+      setStatus('📡 正在以 GPS 優先高精度模式取得位置（最多約 12 秒）…', 'info');
+    }
+
+    try {
+      const pos = await getBestGeolocationPosition();
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const acc = pos.coords.accuracy ?? Infinity;
+
+      if (acc > 3000) {
+        locationModel.phase = 'error';
+        locationModel.errorMessage = `GPS 精度不足（±${Math.round(acc)} m）`;
+        locationModel.lat = null;
+        locationModel.lng = null;
+        locationModel.accuracy = null;
+        clearUserMarker();
+        updateLocationUI();
+        clearStatus();
+        setDiagHelpVisible(true);
+        return false;
+      }
+
+      locationModel.phase = 'success';
+      locationModel.lat = lat;
+      locationModel.lng = lng;
+      locationModel.accuracy = acc;
+      locationModel.errorMessage = '';
+      placeUserMarker(lat, lng, "red");
+      updateLocationUI();
+      if (!silent) {
+        setStatus(`✅ 已取得 GPS 位置（精度 ±${Math.round(acc)} m）`, 'success');
+      }
+      return true;
+    } catch (err) {
+      locationModel.phase = 'error';
+      locationModel.errorMessage = normalizeGeoError(err);
+      locationModel.lat = null;
+      locationModel.lng = null;
+      locationModel.accuracy = null;
+      clearUserMarker();
+      updateLocationUI();
+      clearStatus();
+      setDiagHelpVisible(true);
+      return false;
+    }
+  }
+
   async function doSearch(lat, lng) {
     const radius   = parseInt(radiusSelect.value, 10);
     const minScore = parseFloat(minScoreInput.value);
 
     setStatus('🔍 搜尋中，請稍候…', 'info');
+    setDiagHelpVisible(false);
     searchBtn.disabled = true;
     clearRestaurantLayers();
     placeUserMarker(lat, lng);
     drawRadius(lat, lng, radius);
+    setMapState('地圖：已顯示目前定位點與搜尋範圍', 'success');
 
     try {
       const res = await fetch(
@@ -351,55 +547,38 @@
     } catch (e) {
       setStatus(`❌ 搜尋失敗：${e.message}`, 'error');
     } finally {
-      searchBtn.disabled = false;
+      updateSearchButtonState();
     }
   }
 
   // ── Search button ─────────────────────────────────────────────────────────
-  searchBtn.addEventListener('click', () => {
+  searchBtn.addEventListener('click', async () => {
     const source = document.querySelector('input[name="loc-source"]:checked').value;
 
     if (source === 'manual') {
-      setGpsInfo('目前為手動輸入模式');
       const lat = parseFloat(inputLat.value);
       const lng = parseFloat(inputLng.value);
       if (isNaN(lat) || isNaN(lng)) {
         setStatus('❌ 請輸入有效的緯度和經度', 'error');
         return;
       }
+      locationModel.source = 'manual';
+      locationModel.phase = 'manual';
+      updateLocationUI();
       doSearch(lat, lng);
     } else {
-      if (!navigator.geolocation) {
-        setStatus('❌ 瀏覽器不支援定位，請改用手動輸入', 'error');
+      locationModel.source = 'gps';
+      if (locationModel.phase !== 'success') {
+        const ok = await startGpsLocationFlow({ silent: false });
+        if (!ok) {
+          return;
+        }
+      }
+      if (locationModel.lat == null || locationModel.lng == null) {
+        clearStatus();
         return;
       }
-      setStatus('📡 正在以 GPS 優先高精度模式取得位置（最多約 12 秒）…', 'info');
-      (async () => {
-        try {
-          const pos = await getBestGeolocationPosition();
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          const acc = pos.coords.accuracy ?? Infinity;
-          const now = new Date();
-          setGpsInfo(
-            `${lat.toFixed(6)}, ${lng.toFixed(6)} | 精度 ±${Math.round(acc)} m | ${now.toLocaleTimeString('zh-TW', { hour12: false })}`
-          );
-
-          // Require reasonably accurate GPS to avoid wrong-city/country results.
-          if (acc > 3000) {
-            document.querySelector('input[name="loc-source"][value="manual"]').checked = true;
-            manualCoords.style.display = '';
-            inputLat.value = lat.toFixed(6);
-            inputLng.value = lng.toFixed(6);
-            setStatus(`❌ GPS 精度不足（約 ±${Math.round(acc)} m），請開啟精確定位或改用手動輸入`, 'error');
-            return;
-          }
-
-          doSearch(lat, lng);
-        } catch (err) {
-          setStatus(`❌ 無法取得位置（${err.message}），請改用手動輸入`, 'error');
-        }
-      })();
+      doSearch(locationModel.lat, locationModel.lng);
     }
   });
 
@@ -407,15 +586,45 @@
     runLocationDiagnostics();
   });
 
+  retryLocBtn.addEventListener('click', () => {
+    locationModel.source = 'gps';
+    document.querySelector('input[name="loc-source"][value="gps"]').checked = true;
+    manualCoords.style.display = 'none';
+    startGpsLocationFlow({ silent: false });
+  });
+
+  switchManualBtn.addEventListener('click', () => {
+    locationModel.source = 'manual';
+    locationModel.phase = 'manual';
+    document.querySelector('input[name="loc-source"][value="manual"]').checked = true;
+    manualCoords.style.display = '';
+    if (locationModel.lat != null && locationModel.lng != null) {
+      inputLat.value = locationModel.lat.toFixed(6);
+      inputLng.value = locationModel.lng.toFixed(6);
+    }
+    updateLocationUI();
+    setStatus('ℹ️ 已切換到手動座標模式', 'info');
+  });
+
+  inputLat.addEventListener('input', updateSearchButtonState);
+  inputLng.addEventListener('input', updateSearchButtonState);
+
   // ── Click map to set manual location ─────────────────────────────────────
   map.on('click', e => {
     document.querySelector('input[name="loc-source"][value="manual"]').checked = true;
+    locationModel.source = 'manual';
+    locationModel.phase = 'manual';
     manualCoords.style.display = '';
     inputLat.value = e.latlng.lat.toFixed(6);
     inputLng.value = e.latlng.lng.toFixed(6);
     placeUserMarker(e.latlng.lat, e.latlng.lng, "green", { centerMap: false });
+    updateLocationUI();
     setStatus(`📍 已選取位置：${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`, 'info');
   });
+
+  setDiagHelpVisible(false);
+  updateLocationUI();
+  startGpsLocationFlow({ silent: true });
 
   map.on("moveend", () => {
     saveMapView(map);
