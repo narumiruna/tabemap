@@ -297,10 +297,19 @@ export async function fetchRestaurants(
 
   await backfillMissingCoordinates(results);
 
-  return results.filter((restaurant) => {
+  const filtered = results.filter((restaurant) => {
     if (restaurant.lat === null || restaurant.lng === null) {
       return true;
     }
     return distanceMeters(lat, lng, restaurant.lat, restaurant.lng) <= radiusMeters;
+  });
+
+  return filtered.sort((a, b) => {
+    const scoreA = a.score ?? -Infinity;
+    const scoreB = b.score ?? -Infinity;
+    if (scoreA !== scoreB) {
+      return scoreB - scoreA;
+    }
+    return a.name.localeCompare(b.name, "ja");
   });
 }
