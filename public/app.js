@@ -580,6 +580,7 @@
   });
 
   searchAreaBtn.addEventListener("click", doSearch);
+  initResultsSheetInteractions();
 
   window.addEventListener("resize", () => {
     syncAppHeightVar();
