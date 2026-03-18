@@ -420,4 +420,16 @@
   map.on("moveend", () => {
     saveMapView(map);
   });
+
+  map.whenReady(() => {
+    setTimeout(() => map.invalidateSize(), 0);
+  });
+
+  window.addEventListener("resize", () => {
+    map.invalidateSize();
+  });
+
+  window.addEventListener("orientationchange", () => {
+    setTimeout(() => map.invalidateSize(), 120);
+  });
 })();

@@ -116,7 +116,9 @@ select:focus { border-color: #3b82f6; background: #fff; }
 
 /* ── Map ─────────────────────────────────────────────────────────────────── */
 #map {
-  flex: 0 0 420px;
+  flex: 0 0 auto;
+  height: 420px;
+  min-height: 260px;
   width: 100%;
   z-index: 0;
 }
@@ -346,7 +348,8 @@ select:focus { border-color: #3b82f6; background: #fff; }
   }
 
   #map {
-    height: clamp(260px, 42dvh, 380px);
+    height: 320px;
+    height: clamp(260px, 42vh, 380px);
   }
 
   .results-section {
@@ -393,6 +396,7 @@ select:focus { border-color: #3b82f6; background: #fff; }
   }
 
   #map {
-    height: clamp(230px, 38dvh, 320px);
+    height: 280px;
+    height: clamp(230px, 38vh, 320px);
   }
 }
