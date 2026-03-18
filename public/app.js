@@ -7,12 +7,14 @@
 
   const appState = {
     location: null,
+    locationSource: "map",
     hasMapChanged: false,
     isSearching: false,
     sheetExpanded: false,
     radius: 1000,
     minScore: 3.5,
-    hasGpsError: false
+    hasGpsError: false,
+    isGpsLoading: false
   };
 
   const mapHint = document.getElementById("map-hint");
@@ -20,10 +22,14 @@
   const openSheetBtn = document.getElementById("open-sheet-btn");
   const gpsFabBtn = document.getElementById("gps-fab-btn");
 
-  const bottomSheet = document.getElementById("bottom-sheet");
-  const sheetHeader = document.getElementById("sheet-header");
-  const sheetSummary = document.getElementById("sheet-summary");
+  const controlPanel = document.getElementById("control-panel");
+  const panelHeader = document.getElementById("panel-header");
+  const panelHeaderSummary = document.getElementById("panel-header-summary");
+  const locationSummary = document.getElementById("location-summary");
+  const filterSummary = document.getElementById("filter-summary");
 
+  const locInlineState = document.getElementById("loc-inline-state");
+  const useGpsBtn = document.getElementById("use-gps-btn");
   const radiusSelect = document.getElementById("radius-select");
   const minScoreSelect = document.getElementById("min-score");
 
@@ -37,6 +43,14 @@
 
   const map = initMap();
 
+  function syncAppHeightVar() {
+    document.documentElement.style.setProperty("--app-height", `${window.innerHeight}px`);
+  }
+
+  function isDesktop() {
+    return window.matchMedia("(min-width: 961px)").matches;
+  }
+
   function initMap() {
     const view = loadLastMapView();
     const mapInstance = L.map("map").setView([view.lat, view.lng], view.zoom);
@@ -47,9 +61,12 @@
     }).addTo(mapInstance);
 
     mapInstance.on("click", (e) => {
-      appState.location = { lat: e.latlng.lat, lng: e.latlng.lng };
+      appState.locationSource = "map";
+      setLocation({ lat: e.latlng.lat, lng: e.latlng.lng });
       appState.hasMapChanged = true;
       appState.hasGpsError = false;
+      appState.isGpsLoading = false;
+      syncLocationSourceRadios();
       updateUI();
     });
 
@@ -57,7 +74,7 @@
       saveMapView(mapInstance);
       if (bootstrapping) return;
       const center = mapInstance.getCenter();
-      appState.location = { lat: center.lat, lng: center.lng };
+      setLocation({ lat: center.lat, lng: center.lng });
       appState.hasMapChanged = true;
       updateUI();
     });
@@ -65,7 +82,7 @@
     mapInstance.on("zoomend", () => {
       if (bootstrapping) return;
       const center = mapInstance.getCenter();
-      appState.location = { lat: center.lat, lng: center.lng };
+      setLocation({ lat: center.lat, lng: center.lng });
       appState.hasMapChanged = true;
       updateUI();
     });
@@ -77,10 +94,11 @@
       }, 0);
     });
 
-    window.addEventListener("resize", () => mapInstance.invalidateSize());
-    window.addEventListener("orientationchange", () => setTimeout(() => mapInstance.invalidateSize(), 120));
-
     return mapInstance;
+  }
+
+  function setLocation(point) {
+    appState.location = point;
   }
 
   function loadLastMapView() {
@@ -119,6 +137,52 @@
     });
   }
 
+  function syncLocationSourceRadios() {
+    document.querySelectorAll('input[name="loc-source"]').forEach((radio) => {
+      radio.checked = radio.value === appState.locationSource;
+    });
+  }
+
+  function updateLocationSummary() {
+    const locationText = appState.location ? "已選位置" : "尚未選擇位置";
+    const radiusText = appState.radius >= 1000 ? `${appState.radius / 1000} km` : `${appState.radius} m`;
+    const scoreText = `${appState.minScore.toFixed(1)}+`;
+
+    locationSummary.textContent = locationText;
+    filterSummary.textContent = `${radiusText} ・ ${scoreText}`;
+    panelHeaderSummary.textContent = `${locationText} ・ ${radiusText} ・ ${scoreText}`;
+  }
+
+  function updateLocationInlineState() {
+    locInlineState.className = "inline-state";
+
+    if (appState.isGpsLoading) {
+      locInlineState.textContent = "定位中...";
+      locInlineState.classList.add("is-loading");
+      return;
+    }
+
+    if (appState.hasGpsError) {
+      locInlineState.textContent = "定位失敗，請改用地圖選點";
+      locInlineState.classList.add("is-error");
+      return;
+    }
+
+    if (appState.location && appState.locationSource === "gps") {
+      locInlineState.textContent = "已使用 GPS 位置";
+      locInlineState.classList.add("is-success");
+      return;
+    }
+
+    if (appState.location && appState.locationSource === "map") {
+      locInlineState.textContent = "已使用地圖選點";
+      locInlineState.classList.add("is-success");
+      return;
+    }
+
+    locInlineState.textContent = "點擊地圖選擇位置";
+  }
+
   function renderMarker() {
     if (!appState.location) {
       if (userMarker) {
@@ -140,12 +204,6 @@
     } else {
       userMarker = L.marker([appState.location.lat, appState.location.lng], { icon }).addTo(map);
     }
-  }
-
-  function updateSheetSummary() {
-    const radiusText = appState.radius >= 1000 ? `${appState.radius / 1000} km` : `${appState.radius} m`;
-    const scoreText = `${appState.minScore.toFixed(1)}+`;
-    sheetSummary.textContent = `${radiusText} ・ ${scoreText}`;
   }
 
   function updateMapHint() {
@@ -173,17 +231,27 @@
     searchAreaBtn.textContent = appState.isSearching ? "搜尋中..." : "在此區域搜尋";
   }
 
-  function updateSheetExpandedState() {
-    bottomSheet.classList.toggle("is-expanded", appState.sheetExpanded);
-    sheetHeader.setAttribute("aria-expanded", appState.sheetExpanded ? "true" : "false");
+  function updatePanelState() {
+    if (isDesktop()) {
+      appState.sheetExpanded = true;
+      controlPanel.classList.add("is-expanded");
+      panelHeader.setAttribute("aria-expanded", "true");
+      return;
+    }
+
+    controlPanel.classList.toggle("is-expanded", appState.sheetExpanded);
+    panelHeader.setAttribute("aria-expanded", appState.sheetExpanded ? "true" : "false");
   }
 
   function updateUI() {
-    updateSheetExpandedState();
-    updateSheetSummary();
+    syncLocationSourceRadios();
+    updatePanelState();
+    updateLocationSummary();
+    updateLocationInlineState();
     updateMapHint();
     updateSearchAreaButton();
     renderMarker();
+    useGpsBtn.disabled = appState.isGpsLoading;
   }
 
   function setStatusBar(message, type) {
@@ -234,7 +302,7 @@
     if (appState.isSearching || !appState.hasMapChanged) return;
 
     const center = appState.location || map.getCenter();
-    appState.location = { lat: center.lat, lng: center.lng };
+    setLocation({ lat: center.lat, lng: center.lng });
     appState.isSearching = true;
     appState.hasGpsError = false;
     updateUI();
@@ -253,14 +321,16 @@
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `HTTP ${res.status}`);
       }
+
       const data = await res.json();
       renderRestaurants(data.restaurants || []);
+
       if ((data.count || 0) > 0) {
         setStatusBar(`✅ 找到 ${data.count} 間評分 ≥ ${minScore} 的餐廳`, "success");
       } else {
         setStatusBar(`⚠️ 範圍內找不到評分 ≥ ${minScore} 的餐廳`, "warn");
       }
-      resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+
       appState.hasMapChanged = false;
     } catch (err) {
       setStatusBar(`❌ 搜尋失敗：${err.message}`, "error");
@@ -275,33 +345,52 @@
   async function triggerGpsLocation() {
     if (!navigator.geolocation) {
       appState.hasGpsError = true;
+      appState.isGpsLoading = false;
       updateUI();
       return;
     }
 
+    appState.locationSource = "gps";
+    appState.isGpsLoading = true;
+    appState.hasGpsError = false;
+    updateUI();
+
     try {
       const pos = await getCurrentPositionAsync(GPS_OPTIONS);
       map.setView([pos.coords.latitude, pos.coords.longitude], 16);
-      appState.location = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       appState.hasMapChanged = true;
       appState.hasGpsError = false;
     } catch {
       appState.hasGpsError = true;
+    } finally {
+      appState.isGpsLoading = false;
+      updateUI();
     }
-
-    updateUI();
   }
 
-  sheetHeader.addEventListener("click", () => {
+  panelHeader.addEventListener("click", () => {
+    if (isDesktop()) return;
     appState.sheetExpanded = !appState.sheetExpanded;
     updateUI();
   });
 
   openSheetBtn.addEventListener("click", () => {
+    if (isDesktop()) return;
     appState.sheetExpanded = true;
     updateUI();
   });
 
+  document.querySelectorAll('input[name="loc-source"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (!radio.checked) return;
+      appState.locationSource = radio.value;
+      appState.hasGpsError = false;
+      updateUI();
+    });
+  });
+
+  useGpsBtn.addEventListener("click", triggerGpsLocation);
   gpsFabBtn.addEventListener("click", triggerGpsLocation);
 
   radiusSelect.addEventListener("change", () => {
@@ -316,5 +405,20 @@
 
   searchAreaBtn.addEventListener("click", doSearch);
 
+  window.addEventListener("resize", () => {
+    syncAppHeightVar();
+    map.invalidateSize();
+    updateUI();
+  });
+
+  window.addEventListener("orientationchange", () => {
+    setTimeout(() => {
+      syncAppHeightVar();
+      map.invalidateSize();
+      updateUI();
+    }, 120);
+  });
+
+  syncAppHeightVar();
   updateUI();
 })();

@@ -9,22 +9,39 @@
 </head>
 <body>
   <main class="map-screen" aria-label="地圖主畫面">
-    <div id="map"></div>
+    <section class="map-pane" aria-label="互動地圖">
+      <div id="map"></div>
 
-    <div id="map-hint" class="map-hint" aria-live="polite">移動地圖或點選位置後即可搜尋</div>
+      <div id="map-hint" class="map-hint" aria-live="polite">移動地圖或點選位置後即可搜尋</div>
+      <button id="search-area-btn" class="search-area-btn" type="button" hidden>在此區域搜尋</button>
+      <button id="open-sheet-btn" class="floating-chip" type="button">篩選與設定</button>
+      <button id="gps-fab-btn" class="fab" type="button" aria-label="使用目前位置">◎</button>
+    </section>
 
-    <button id="search-area-btn" class="search-area-btn" type="button" hidden>在此區域搜尋</button>
-    <button id="open-sheet-btn" class="floating-chip" type="button">篩選與設定</button>
-    <button id="gps-fab-btn" class="fab" type="button" aria-label="使用目前位置">◎</button>
-
-    <section id="bottom-sheet" class="bottom-sheet" aria-label="篩選設定">
-      <button id="sheet-header" class="sheet-header" type="button" aria-expanded="false">
-        <span class="sheet-handle" aria-hidden="true"></span>
-        <span id="sheet-summary" class="sheet-summary">1 km ・ 3.5+</span>
+    <aside id="control-panel" class="control-panel" aria-label="篩選與設定">
+      <button id="panel-header" class="panel-header" type="button" aria-expanded="false">
+        <span class="panel-handle" aria-hidden="true"></span>
+        <span id="panel-header-summary" class="panel-header-summary">尚未選擇位置 ・ 1 km ・ 3.5+</span>
       </button>
 
-      <div class="sheet-content">
-        <section class="sheet-block" aria-label="篩選條件">
+      <div id="panel-content" class="panel-content">
+        <section class="panel-block" aria-label="摘要">
+          <h2>摘要</h2>
+          <p id="location-summary" class="summary-line">尚未選擇位置</p>
+          <p id="filter-summary" class="summary-line">1 km ・ 3.5+</p>
+        </section>
+
+        <section class="panel-block" aria-label="位置設定">
+          <h2>位置</h2>
+          <div class="radio-group">
+            <label><input type="radio" name="loc-source" value="map" checked /> 使用地圖選點（預設）</label>
+            <label><input type="radio" name="loc-source" value="gps" /> 使用 GPS</label>
+          </div>
+          <button id="use-gps-btn" class="btn-secondary" type="button">使用目前位置</button>
+          <p id="loc-inline-state" class="inline-state" aria-live="polite">點擊地圖選擇位置</p>
+        </section>
+
+        <section class="panel-block" aria-label="篩選條件">
           <h2>篩選</h2>
           <label class="field-label" for="radius-select">搜尋半徑</label>
           <select id="radius-select">
@@ -45,7 +62,7 @@
           </select>
         </section>
       </div>
-    </section>
+    </aside>
   </main>
 
   <section id="results-section" class="results-section" style="display:none">
