@@ -43,6 +43,10 @@ Recent commits use short, purpose-first messages such as `fix: ...` and `docs: .
 ## Map UI Interaction Rules
 The app is map-first. Preserve these decisions unless explicitly changed by product direction:
 
+- Apple design compliance:
+  - All UI and interaction changes MUST follow Apple Human Interface Guidelines (HIG).
+  - If a proposal conflicts with HIG interaction clarity, feedback, hierarchy, or touch ergonomics, revise it before implementation.
+
 - Search trigger:
   - `Search This Area` is the only search trigger.
   - Do not add bottom full-width search CTA.
