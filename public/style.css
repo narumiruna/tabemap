@@ -206,9 +206,34 @@ select:focus { border-color: #3b82f6; background: #fff; }
 
 /* ── Leaflet custom icons ─────────────────────────────────────────────────── */
 .user-marker {
-  font-size: 24px;
-  line-height: 1;
-  text-align: center;
+  background: transparent;
+  border: 0;
+}
+.user-pin {
+  position: relative;
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+.user-pin::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.9);
+  top: 5px;
+  left: 5px;
+}
+.user-pin-green { background: #16a34a; }
+.user-pin-red { background: #dc2626; }
+.user-pin-green::after,
+.user-pin-red::after {
+  transform: rotate(45deg);
 }
 .rst-marker {
   width: 28px !important;

@@ -101,13 +101,26 @@
     if (radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
   }
 
+  function buildUserMarkerIcon(color = "red") {
+    const safeColor = color === "green" ? "green" : "red";
+    return L.divIcon({
+      className: "user-marker",
+      html: `<span class="user-pin user-pin-${safeColor}"></span>`,
+      iconSize: [20, 30],
+      iconAnchor: [10, 30]
+    });
+  }
+
   // ── Place user marker ─────────────────────────────────────────────────────
-  function placeUserMarker(lat, lng) {
+  function placeUserMarker(lat, lng, color = "red", options = {}) {
+    const { centerMap = true } = options;
     if (userMarker) map.removeLayer(userMarker);
     userMarker = L.marker([lat, lng], {
-      icon: L.divIcon({ className: 'user-marker', html: '📍', iconSize: [28, 28], iconAnchor: [14, 28] })
-    }).addTo(map).bindPopup('您的位置').openPopup();
-    map.setView([lat, lng], 15);
+      icon: buildUserMarkerIcon(color)
+    }).addTo(map).bindPopup('您的位置');
+    if (centerMap) {
+      map.setView([lat, lng], 15);
+    }
   }
 
   // ── Draw radius circle ────────────────────────────────────────────────────
@@ -400,6 +413,7 @@
     manualCoords.style.display = '';
     inputLat.value = e.latlng.lat.toFixed(6);
     inputLng.value = e.latlng.lng.toFixed(6);
+    placeUserMarker(e.latlng.lat, e.latlng.lng, "green", { centerMap: false });
     setStatus(`📍 已選取位置：${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`, 'info');
   });
 
