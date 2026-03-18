@@ -267,6 +267,8 @@ select {
   gap: .65rem;
   padding: .58rem .92rem .52rem;
   border-bottom: 1px solid rgba(148, 163, 184, .2);
+  touch-action: none;
+  user-select: none;
 }
 
 .results-drag-handle {
@@ -277,6 +279,7 @@ select {
   background: #c7c7cc;
   margin-top: .35rem;
   flex: 0 0 auto;
+  touch-action: none;
 }
 
 .results-headline {

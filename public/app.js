@@ -473,29 +473,32 @@
   function initResultsSheetInteractions() {
     let startY = 0;
     let isDragging = false;
+    let activePointerId = null;
 
     const onPointerMove = (event) => {
-      if (!isDragging) return;
+      if (!isDragging || event.pointerId !== activePointerId) return;
       const deltaY = event.clientY - startY;
-      if (deltaY > 0) {
-        resultsSection.style.transform = `translateY(${Math.min(deltaY, 120)}px)`;
+      if (appState.resultsSheet === "peek" || appState.resultsSheet === "expanded") {
+        const distance = deltaY > 0 ? Math.min(deltaY, 120) : Math.max(deltaY, -80);
+        resultsSection.style.transform = `translateY(${distance}px)`;
       }
     };
 
     const onPointerUp = (event) => {
-      if (!isDragging) return;
+      if (!isDragging || event.pointerId !== activePointerId) return;
       const deltaY = event.clientY - startY;
       isDragging = false;
+      activePointerId = null;
       resultsSection.style.transform = "";
       resultsSection.releasePointerCapture?.(event.pointerId);
 
-      if (deltaY > 60) {
+      if (deltaY > 48) {
         if (appState.resultsSheet === "expanded") {
           appState.resultsSheet = "peek";
         } else if (appState.resultsSheet === "peek") {
           appState.resultsSheet = "hidden";
         }
-      } else if (deltaY < -40 && appState.resultsSheet === "peek") {
+      } else if (deltaY < -28 && appState.resultsSheet === "peek") {
         appState.resultsSheet = "expanded";
       }
       updateUI();
@@ -503,14 +506,17 @@
 
     resultsHeader.addEventListener("pointerdown", (event) => {
       if (event.target === resultsCloseBtn) return;
+      if (appState.resultsSheet === "hidden") return;
       isDragging = true;
       startY = event.clientY;
+      activePointerId = event.pointerId;
       resultsSection.setPointerCapture?.(event.pointerId);
     });
 
-    resultsHeader.addEventListener("pointermove", onPointerMove);
-    resultsHeader.addEventListener("pointerup", onPointerUp);
-    resultsHeader.addEventListener("pointercancel", onPointerUp);
+    // Use the sheet root as drag receiver so captured pointer events never get lost.
+    resultsSection.addEventListener("pointermove", onPointerMove);
+    resultsSection.addEventListener("pointerup", onPointerUp);
+    resultsSection.addEventListener("pointercancel", onPointerUp);
 
     resultsDragHandle.addEventListener("click", () => {
       if (appState.resultsSheet === "hidden") {
