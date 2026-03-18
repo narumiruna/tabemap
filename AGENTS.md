@@ -39,3 +39,24 @@ Recent commits use short, purpose-first messages such as `fix: ...` and `docs: .
 - Keep commits focused on one logical change.
 - PRs should include: what changed, why, how it was validated (`npm run build`, manual checks), and screenshots/GIFs for UI updates.
 - Link related issues when applicable.
+
+## Map UI Interaction Rules
+The app is map-first. Preserve these decisions unless explicitly changed by product direction:
+
+- Search trigger:
+  - `Search This Area` is the only search trigger.
+  - Do not add bottom full-width search CTA.
+- Marker behavior:
+  - Keep exactly one user-selected center marker.
+  - Map `move/zoom` must not move the existing selected marker automatically.
+- Search overlays:
+  - After search, render radius circle and restaurant markers (when coordinates exist).
+  - Clear stale overlays when starting a new search or context changes.
+- Results sheet:
+  - Use three states: `hidden`, `peek`, `expanded`.
+  - Default to `peek` after successful search.
+  - Must include explicit close control (`×`) and reopen chip.
+- Layout model:
+  - Desktop uses persistent right sidebar for controls.
+  - Mobile uses bottom control panel behavior.
+  - Keep map as the dominant surface on both form factors.
