@@ -21,6 +21,7 @@
 
   const mapHint = document.getElementById("map-hint");
   const searchAreaBtn = document.getElementById("search-area-btn");
+  const searchAreaLabel = document.getElementById("search-area-label");
   const openSheetBtn = document.getElementById("open-sheet-btn");
   const gpsFabBtn = document.getElementById("gps-fab-btn");
 
@@ -295,12 +296,12 @@
 
     if (!shouldShow) {
       searchAreaBtn.disabled = false;
-      searchAreaBtn.textContent = "在此區域搜尋";
+      searchAreaLabel.textContent = "在此區域搜尋";
       return;
     }
 
     searchAreaBtn.disabled = appState.isSearching;
-    searchAreaBtn.textContent = appState.isSearching ? "搜尋中..." : "在此區域搜尋";
+    searchAreaLabel.textContent = appState.isSearching ? "搜尋中..." : "在此區域搜尋";
   }
 
   function updatePanelState() {
@@ -363,7 +364,7 @@
     resultsTitle.textContent = `搜尋結果（${restaurants.length} 間）`;
 
     if (restaurants.length === 0) {
-      restaurantList.innerHTML = '<p class="rst-card">此範圍內找不到符合條件的餐廳。</p>';
+      restaurantList.innerHTML = '<p class="empty-state">此範圍內找不到符合條件的餐廳。</p>';
       return;
     }
 
@@ -375,13 +376,16 @@
       const scoreText = r.score != null ? Number(r.score).toFixed(2) : "—";
 
       card.innerHTML = `
-        <a class="rst-name" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a>
-        <div class="rst-meta">
-          <span class="score-badge ${scoreClass}">★ ${scoreText}</span>
-          ${r.genre ? `<span>${esc(r.genre)}</span>` : ""}
-          ${r.lat == null || r.lng == null ? `<span style="color:#64748b;">位置資料不足</span>` : ""}
+        <div class="rst-card-num" aria-hidden="true">${idx + 1}</div>
+        <div class="rst-card-body">
+          <a class="rst-name" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a>
+          <div class="rst-meta">
+            <span class="score-badge ${scoreClass}">★ ${scoreText}</span>
+            ${r.genre ? `<span>${esc(r.genre)}</span>` : ""}
+            ${r.lat == null || r.lng == null ? `<span class="rst-meta-note">位置資料不足</span>` : ""}
+          </div>
+          ${r.address ? `<p class="rst-address">${esc(r.address)}</p>` : ""}
         </div>
-        ${r.address ? `<p class="rst-address">${esc(r.address)}</p>` : ""}
       `;
 
       card.addEventListener("click", () => {
