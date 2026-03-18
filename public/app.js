@@ -39,6 +39,8 @@
   const restaurantList = document.getElementById("restaurant-list");
 
   let userMarker = null;
+  let restaurantMarkers = [];
+  let searchRadiusCircle = null;
   let bootstrapping = true;
 
   const map = initMap();
@@ -66,6 +68,7 @@
       appState.hasMapChanged = true;
       appState.hasGpsError = false;
       appState.isGpsLoading = false;
+      clearSearchLayers();
       syncLocationSourceRadios();
       updateUI();
     });
@@ -76,6 +79,7 @@
       const center = mapInstance.getCenter();
       setLocation({ lat: center.lat, lng: center.lng });
       appState.hasMapChanged = true;
+      clearSearchLayers();
       updateUI();
     });
 
@@ -84,6 +88,7 @@
       const center = mapInstance.getCenter();
       setLocation({ lat: center.lat, lng: center.lng });
       appState.hasMapChanged = true;
+      clearSearchLayers();
       updateUI();
     });
 
@@ -183,6 +188,18 @@
     locInlineState.textContent = "點擊地圖選擇位置";
   }
 
+  function clearSearchLayers() {
+    restaurantMarkers.forEach((marker) => {
+      if (marker) map.removeLayer(marker);
+    });
+    restaurantMarkers = [];
+
+    if (searchRadiusCircle) {
+      map.removeLayer(searchRadiusCircle);
+      searchRadiusCircle = null;
+    }
+  }
+
   function renderMarker() {
     if (!appState.location) {
       if (userMarker) {
@@ -204,6 +221,61 @@
     } else {
       userMarker = L.marker([appState.location.lat, appState.location.lng], { icon }).addTo(map);
     }
+  }
+
+  function createRestaurantMarkerIcon(label) {
+    return L.divIcon({
+      className: "restaurant-marker",
+      html: `<span style="
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        width:26px;
+        height:26px;
+        border-radius:999px;
+        background:rgba(255,255,255,.94);
+        color:#111827;
+        font-weight:700;
+        font-size:12px;
+        border:1px solid rgba(59,130,246,.45);
+        box-shadow:0 4px 10px rgba(15,23,42,.16);
+      ">${label}</span>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+  }
+
+  function renderSearchOverlays(restaurants, center, radius) {
+    clearSearchLayers();
+
+    searchRadiusCircle = L.circle([center.lat, center.lng], {
+      radius,
+      color: "#2563eb",
+      fillColor: "#60a5fa",
+      fillOpacity: 0.1,
+      weight: 1.5
+    }).addTo(map);
+
+    restaurantMarkers = restaurants.map((restaurant, idx) => {
+      if (restaurant.lat == null || restaurant.lng == null) return null;
+
+      const scoreText = restaurant.score != null ? Number(restaurant.score).toFixed(2) : "—";
+      const marker = L.marker([restaurant.lat, restaurant.lng], {
+        icon: createRestaurantMarkerIcon(String(idx + 1))
+      }).addTo(map);
+
+      marker.bindPopup(`
+        <div style="font-size:12px;line-height:1.45;color:#111827;">
+          <a href="${esc(restaurant.url)}" target="_blank" rel="noopener" style="color:#111827;font-weight:700;text-decoration:none;">
+            ${esc(restaurant.name)}
+          </a><br/>
+          <span style="color:#475569;">★ ${scoreText}</span>
+          ${restaurant.address ? `<br/><span style="color:#6b7280;">${esc(restaurant.address)}</span>` : ""}
+        </div>
+      `);
+
+      return marker;
+    });
   }
 
   function updateMapHint() {
@@ -278,7 +350,7 @@
       return;
     }
 
-    restaurants.forEach((r) => {
+    restaurants.forEach((r, idx) => {
       const card = document.createElement("article");
       card.className = "rst-card";
 
@@ -290,9 +362,17 @@
         <div class="rst-meta">
           <span class="score-badge ${scoreClass}">★ ${scoreText}</span>
           ${r.genre ? `<span>${esc(r.genre)}</span>` : ""}
+          ${r.lat == null || r.lng == null ? `<span style="color:#64748b;">位置資料不足</span>` : ""}
         </div>
         ${r.address ? `<p class="rst-address">${esc(r.address)}</p>` : ""}
       `;
+
+      card.addEventListener("click", () => {
+        const marker = restaurantMarkers[idx];
+        if (!marker) return;
+        map.setView(marker.getLatLng(), Math.max(map.getZoom(), 15));
+        marker.openPopup();
+      });
 
       restaurantList.appendChild(card);
     });
@@ -306,6 +386,7 @@
     appState.isSearching = true;
     appState.hasGpsError = false;
     updateUI();
+    clearSearchLayers();
 
     resultsSection.style.display = "";
     setStatusBar("🔍 搜尋中，請稍候...", "info");
@@ -323,7 +404,9 @@
       }
 
       const data = await res.json();
-      renderRestaurants(data.restaurants || []);
+      const restaurants = data.restaurants || [];
+      renderRestaurants(restaurants);
+      renderSearchOverlays(restaurants, center, radius);
 
       if ((data.count || 0) > 0) {
         setStatusBar(`✅ 找到 ${data.count} 間評分 ≥ ${minScore} 的餐廳`, "success");
@@ -336,6 +419,7 @@
       setStatusBar(`❌ 搜尋失敗：${err.message}`, "error");
       restaurantList.innerHTML = "";
       resultCount.textContent = "";
+      clearSearchLayers();
     } finally {
       appState.isSearching = false;
       updateUI();
@@ -386,6 +470,7 @@
       if (!radio.checked) return;
       appState.locationSource = radio.value;
       appState.hasGpsError = false;
+      if (appState.hasMapChanged) clearSearchLayers();
       updateUI();
     });
   });
@@ -395,11 +480,13 @@
 
   radiusSelect.addEventListener("change", () => {
     appState.radius = parseInt(radiusSelect.value, 10);
+    if (appState.hasMapChanged) clearSearchLayers();
     updateUI();
   });
 
   minScoreSelect.addEventListener("change", () => {
     appState.minScore = parseFloat(minScoreSelect.value);
+    if (appState.hasMapChanged) clearSearchLayers();
     updateUI();
   });
 
