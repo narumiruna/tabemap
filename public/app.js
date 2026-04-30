@@ -201,6 +201,13 @@
     }
   }
 
+  function clearResults() {
+    clearSearchLayers();
+    appState.results = [];
+    restaurantList.innerHTML = "";
+    appState.resultsSheet = "hidden";
+  }
+
   function renderMarker() {
     if (!appState.location) {
       if (userMarker) {
@@ -433,7 +440,9 @@
         setResultsSubtitle(`範圍內找不到評分 ≥ ${minScore} 的餐廳`, "warn");
       }
 
-      appState.hasMapChanged = false;
+      if (appState.radius === radius && appState.minScore === minScore) {
+        appState.hasMapChanged = false;
+      }
       appState.resultsSheet = "peek";
     } catch (err) {
       appState.results = [];
@@ -580,7 +589,7 @@
 
   radiusSelect.addEventListener("change", () => {
     appState.radius = parseInt(radiusSelect.value, 10);
-    clearSearchLayers();
+    clearResults();
     appState.hasMapChanged = true;
     if (!isDesktop()) appState.sheetExpanded = false;
     updateUI();
@@ -588,7 +597,7 @@
 
   minScoreSelect.addEventListener("change", () => {
     appState.minScore = parseFloat(minScoreSelect.value);
-    clearSearchLayers();
+    clearResults();
     appState.hasMapChanged = true;
     if (!isDesktop()) appState.sheetExpanded = false;
     updateUI();
