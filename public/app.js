@@ -8,7 +8,7 @@
   const appState = {
     location: null,
     locationSource: "map",
-    hasMapChanged: false,
+    hasMapChanged: true,
     isSearching: false,
     sheetExpanded: false,
     radius: 1000,
@@ -466,6 +466,7 @@
       setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       appState.hasMapChanged = true;
       appState.hasGpsError = false;
+      if (!isDesktop()) appState.sheetExpanded = false;
     } catch {
       appState.hasGpsError = true;
     } finally {
@@ -579,13 +580,17 @@
 
   radiusSelect.addEventListener("change", () => {
     appState.radius = parseInt(radiusSelect.value, 10);
-    if (appState.hasMapChanged) clearSearchLayers();
+    clearSearchLayers();
+    appState.hasMapChanged = true;
+    if (!isDesktop()) appState.sheetExpanded = false;
     updateUI();
   });
 
   minScoreSelect.addEventListener("change", () => {
     appState.minScore = parseFloat(minScoreSelect.value);
-    if (appState.hasMapChanged) clearSearchLayers();
+    clearSearchLayers();
+    appState.hasMapChanged = true;
+    if (!isDesktop()) appState.sheetExpanded = false;
     updateUI();
   });
 
